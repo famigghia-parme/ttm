@@ -1,0 +1,101 @@
+<!-- TennisTavoloManager - index.html  (PWA cloud, pubblicata su GitHub Pages) -->
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#1b5e20">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="TennisTavolo">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="apple-touch-icon.png">
+    <link rel="icon" href="icon-192.png">
+    <title>TennisTavolo</title>
+    <style>
+        :root { --verde: #1b5e20; --bordo: #ddd; --grigio: #666; }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body { margin: 0; font-family: system-ui,-apple-system,"Segoe UI",sans-serif; padding-bottom: 64px; }
+        header { background: var(--verde); color: #fff; padding: 12px 16px; font-weight: 600;
+                 position: sticky; top: 0; z-index: 2; display: flex; justify-content: space-between; gap: 8px; }
+        #stato { font-size: 12px; font-weight: 400; opacity: .9; text-align: right; }
+        #aggiorna { background: #fbbf24; color: #222; padding: 10px 16px; font-weight: 600; cursor: pointer; }
+        main { padding: 12px 16px; }
+        nav { position: fixed; bottom: 0; left: 0; right: 0; display: flex; background: #fff;
+              border-top: 1px solid var(--bordo); padding-bottom: env(safe-area-inset-bottom); }
+        nav button { flex: 1; border: 0; background: none; padding: 12px 4px; font-size: 13px; color: var(--grigio); }
+        nav button.att { color: var(--verde); font-weight: 700; }
+        .vuoto { color: #888; text-align: center; margin-top: 24px; list-style: none; }
+
+        /* font 16px sui campi: sotto i 16 Safari iOS fa zoom automatico.
+           ATTENZIONE: nel CSS i commenti si scrivono SOLO cosi', mai con "//". */
+        select, input, button.pieno { width: 100%; font-size: 16px; padding: 10px; margin: 4px 0;
+                                      border: 1px solid var(--bordo); border-radius: 8px; background: #fff; }
+        button.pieno { background: var(--verde); color: #fff; border: 0; font-weight: 600; }
+        button.chiaro { background: #eee; color: #333; }
+        button:disabled { opacity: .5; }
+        form { border: 1px solid var(--bordo); border-radius: 10px; padding: 10px; margin: 8px 0; background: #f7f7f7; }
+        .riga { display: flex; gap: 8px; }
+        .riga > * { flex: 1; }
+        .sesso { display: flex; gap: 16px; padding: 8px 2px; }
+        #msg { color: #b00; min-height: 1.2em; margin: 4px 0; font-size: 14px; }
+        ul { list-style: none; padding: 0; margin: 8px 0; }
+        li.atleta { padding: 10px 4px; border-bottom: 1px solid #eee; }
+        li.atleta span { float: right; color: var(--grigio); font-size: 13px; }
+        li.cliccabile { cursor: pointer; }
+        li small { color: var(--grigio); }
+        h4 { margin: 14px 0 4px; color: var(--verde); }
+        .tabs { display: flex; gap: 6px; margin: 8px 0; }
+        .tabs button { flex: 1; padding: 10px 6px; border: 1px solid var(--bordo); border-radius: 8px; background: #fff; font-size: 14px; }
+        .tabs button.att { background: var(--verde); color: #fff; border-color: var(--verde); }
+
+        .flagTutti { display: flex; align-items: center; gap: 8px; margin: 4px 0 8px; font-size: 14px; }
+        .flagTutti input { width: auto; margin: 0; }
+        li.nostro { border-left: 4px solid var(--verde); padding-left: 8px; }
+        li.giocato { opacity: .8; }
+
+        .lvTesta { display: flex; align-items: center; gap: 8px; margin: 8px 0; font-size: 14px; }
+        .lvTesta b { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .lvTesta b:last-child { text-align: right; }
+        .lvTot { font-size: 22px; font-weight: 700; flex: none; }
+        .lvTot small.lvEtic { display: block; font-size: 10px; font-weight: 400; color: var(--grigio); text-align: center; }
+        .lvInfo { color: var(--grigio); font-size: 13px; text-align: center; margin: 4px 0; }
+
+        .rpPart { padding: 8px 4px; border-bottom: 1px solid #eee; }
+        .rpVince { font-weight: 700; color: var(--verde); }
+        .rpSq { margin: 10px 0 2px; }
+        .rpForm { padding: 4px 2px; }
+
+        .rsRiga { display: flex; align-items: center; gap: 8px; padding: 10px 4px; border-bottom: 1px solid #eee; cursor: pointer; }
+        .rsRiga > div { flex: 1; }
+        .rsRiga small { display: block; color: var(--grigio); font-size: 13px; }
+        .rsRiga.dentro { background: #e8f5e9; }
+        .rsAz { flex: none; width: 36px; height: 36px; line-height: 36px; text-align: center; border-radius: 50%; background: #eee; font-weight: 700; font-size: 18px; }
+        .rsRiga.dentro .rsAz { background: #ffcdd2; }
+        .rsConta { font-weight: 600; color: var(--verde); margin: 6px 0; }
+        .rsSalva { position: sticky; bottom: 72px; }
+        .rsNostra { color: var(--verde); font-weight: 700; }
+    </style>
+</head>
+<body>
+    <header><span>TennisTavolo</span><span id="stato"></span></header>
+    <div id="aggiorna" hidden>Nuova versione disponibile — tocca qui per aggiornare</div>
+    <main id="vista"><p class="vuoto">Caricamento…</p></main>
+    <nav id="nav" hidden>
+        <button data-v="incontri">Incontri</button>
+        <button data-v="rosa">Rosa</button>
+        <button data-v="atleti">Atleti</button>
+        <button data-v="account">Account</button>
+    </nav>
+
+<!-- Il ?v= deve essere UGUALE a VERSIONE in sw.js e va aumentato a ogni
+     modifica di un file: e' cosi' che i telefoni scaricano la versione nuova. -->
+    <script src="config.js?v=3.9.1"></script>
+    <script src="store.js?v=3.9.1"></script>
+    <script src="cloud.js?v=3.9.1"></script>
+    <script src="sync.js?v=3.9.1"></script>
+    <script src="app.js?v=3.9.1"></script>
+    <script src="incontri.js?v=3.9.1"></script>
+    <script src="rosa.js?v=3.9.1"></script>
+    <script src="atleti.js?v=3.9.1"></script>
+</body>
+</html>
