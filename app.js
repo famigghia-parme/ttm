@@ -74,8 +74,14 @@ async function aggiornaStato() {
 // ---------------- login ----------------
 function mostraLogin(avviso = '') {
     $('#nav').hidden = true;
+    // Con due ambienti configurati si sceglie qui (ognuno col suo accesso).
+    const scelta = AMBIENTI_PRONTI.length > 1
+        ? `<div class="tabs">${AMBIENTI_PRONTI.map(a =>
+            `<button type="button" data-amb="${a}"${a === AMBIENTE ? ' class="att"' : ''}>${a === 'prova' ? 'Prova' : 'Reale'}</button>`).join('')}</div>`
+        : '';
     $('#vista').innerHTML = `
-    <h3>Accesso</h3>
+    <h3>Accesso${PROVA ? ' — ambiente di PROVA' : ''}</h3>
+    ${scelta}
     <p class="vuoto" style="text-align:left">Usa l'email e la password che ti ha dato la società.</p>
     <form id="frmLogin" autocomplete="on">
       <input name="email" type="email" placeholder="Email" required autocomplete="username">
@@ -83,6 +89,9 @@ function mostraLogin(avviso = '') {
       <div id="msg">${esc(avviso)}</div>
       <button class="pieno" id="btnEntra">Entra</button>
     </form>`;
+    document.querySelectorAll('button[data-amb]').forEach(b => b.onclick = () => {
+        if (b.dataset.amb !== AMBIENTE) cambiaAmbiente(b.dataset.amb);
+    });
     $('#frmLogin').onsubmit = async e => {
         e.preventDefault();
         const f = e.target, b = $('#btnEntra');
@@ -96,6 +105,9 @@ function mostraLogin(avviso = '') {
                 msg('Account non abilitato: chiedi di essere aggiunto alla lista membri.');
                 return;
             }
+            // Progetto Supabase dell'altro ambiente (o senza etichetta): stop.
+            const errAmb = await ambienteSbagliato();
+            if (errAmb) { Cloud.logout(); msg(errAmb); return; }
             $('#vista').innerHTML = '<p class="vuoto">Primo scarico dei dati…</p>';
             await Sync.esegui();
             entra();
@@ -127,9 +139,11 @@ viste.account = {
         const avvisi = Sync.avvisi.length
             ? '<h4>Avvisi dell\'ultimo sync</h4><ul>' + Sync.avvisi.map(a => `<li class="atleta">${esc(a)}</li>`).join('') + '</ul>'
             : '';
+        const altro = AMBIENTI_PRONTI.find(a => a !== AMBIENTE);
         $('#acCorpo').innerHTML = `
       <h4>Account</h4>
       <p>${esc(Cloud.sessione?.email || '')}</p>
+      <p>Ambiente: <b class="${PROVA ? 'ambProva' : ''}">${PROVA ? 'PROVA' : 'REALE'}</b></p>
       <p><small>Stagione: ${esc(await stagioneCorrente() || 'n/d')} · Versione ${esc(VERSIONE_APP)}</small></p>
       <p><small>Ultima sincronizzazione: ${Sync.ultimoOk ? Sync.ultimoOk.toLocaleString('it-IT') : 'mai'}
         ${Sync.messaggio ? '<br>' + esc(Sync.messaggio) : ''}</small></p>
@@ -137,8 +151,17 @@ viste.account = {
       <button class="pieno" id="acSync">Sincronizza ora</button>
       ${avvisi}
       <div id="msg"></div>
+      ${altro ? `<button class="pieno chiaro" id="acAmbiente" style="margin-top:24px">Passa all'ambiente ${altro === 'prova' ? 'PROVA' : 'REALE'}</button>` : ''}
       <button class="pieno chiaro" id="acEsci" style="margin-top:24px">Esci</button>`;
         $('#acSync').onclick = async () => { await Sync.esegui(); viste.account.init(); };
+        const ba = $('#acAmbiente');
+        if (ba) ba.onclick = async () => {
+            // Nulla si perde: dati e modifiche in attesa restano nell'ambiente lasciato.
+            const n2 = await contaInAttesa();
+            if (!confirm(`Passare all'ambiente ${altro.toUpperCase()}?` +
+                (n2 ? `\n${n2} modifiche di ${AMBIENTE.toUpperCase()} restano da inviare: partiranno al ritorno.` : ''))) return;
+            cambiaAmbiente(altro);
+        };
         $('#acEsci').onclick = esci;
     }
 };
@@ -199,8 +222,13 @@ async function avvio() {
     registraSw();
     navigator.storage?.persist?.().catch(() => { });   // chiede di non cancellare i dati offline
 
-    if (!/^https?:\/\/.+/.test(CONFIG.SUPABASE_URL) || CONFIG.SUPABASE_URL.includes('INSERISCI')) {
-        $('#vista').innerHTML = '<p class="vuoto">config.js non compilato: inserisci indirizzo e chiave di Supabase.</p>';
+    // Ambiente di Prova: intestazione arancione e scritta PROVA, sempre visibili.
+    document.body.classList.toggle('prova', PROVA);
+    $('#ambiente').textContent = PROVA ? 'PROVA' : '';
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', PROVA ? '#ff8c00' : '#1b5e20');
+
+    if (!AMBIENTI_PRONTI.length) {
+        $('#vista').innerHTML = '<p class="vuoto">config.js non compilato: inserisci indirizzo e chiave di Supabase (almeno un ambiente).</p>';
         return;
     }
     await apriDb();

@@ -32,6 +32,11 @@ const Sync = {
         this.avvisi = [];
         this._imposta('corso', 'Sincronizzazione…');
         try {
+            // Cloud dell'altro ambiente o senza etichetta: nessuna riga deve
+            // passare, in nessuna direzione (come SyncService sul PC).
+            const errAmb = await ambienteSbagliato();
+            if (errAmb) { this._imposta('errore', errAmb); return; }
+
             // Cloud azzerato (reset.sql) dopo l'ultimo giro: i dati locali
             // sono di un altro database e nessun pull li toglierebbe mai.
             // Si svuota tutto e si riparte, anche la coda da inviare.
@@ -62,6 +67,22 @@ const Sync = {
         document.dispatchEvent(new Event('ttm-stato'));
     }
 };
+
+// ----------------------------------------------------------------
+// AMBIENTE: etichetta del progetto Supabase (tabella ambiente, script
+// scriptSql/ambiente_*.sql) confrontata con l'ambiente scelto sul telefono.
+// null = tutto a posto, altrimenti il messaggio da mostrare.
+// ----------------------------------------------------------------
+async function ambienteSbagliato() {
+    const r = await Cloud.rest('GET', 'ambiente?select=nome');
+    const nome = r.ok && r.json?.length ? String(r.json[0].nome || '').trim().toLowerCase() : '';
+    if (!nome)
+        return `Il cloud non dice se è Reale o di Prova: va eseguito scriptSql/ambiente_${AMBIENTE}.sql in Supabase.`;
+    if (nome !== AMBIENTE)
+        return `Questo è il cloud ${nome.toUpperCase()}, ma il telefono è in ${AMBIENTE.toUpperCase()}: ` +
+            'sincronizzazione bloccata. Controlla config.js.';
+    return null;
+}
 
 // ----------------------------------------------------------------
 // ISTANZA: uid del database cloud (tabella istanza). Il primo valore

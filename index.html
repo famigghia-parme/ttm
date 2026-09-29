@@ -17,11 +17,17 @@
         body { margin: 0; font-family: system-ui,-apple-system,"Segoe UI",sans-serif; padding-bottom: 64px; }
         header { background: var(--verde); color: #fff; padding: 12px 16px; font-weight: 600;
                  position: sticky; top: 0; z-index: 2; display: flex; justify-content: space-between; gap: 8px; }
+        /* Ambiente di Prova (store.js: PROVA): intestazione arancione */
+        body.prova header { background: #ff8c00; color: #000; }
+        #ambiente { background: #000; color: #ff8c00; border-radius: 4px; padding: 0 6px; margin-left: 6px; font-size: 12px; }
+        #ambiente:empty { display: none; }
+        .ambProva { color: #e67300; }
         #stato { font-size: 12px; font-weight: 400; opacity: .9; text-align: right; }
         #aggiorna { background: #fbbf24; color: #222; padding: 10px 16px; font-weight: 600; cursor: pointer; }
         main { padding: 12px 16px; }
         nav { position: fixed; bottom: 0; left: 0; right: 0; display: flex; background: #fff;
               border-top: 1px solid var(--bordo); padding-bottom: env(safe-area-inset-bottom); }
+        nav[hidden] { display: none; }   /* display:flex sopra vince sull'attributo hidden */
         nav button { flex: 1; border: 0; background: none; padding: 12px 4px; font-size: 13px; color: var(--grigio); }
         nav button.att { color: var(--verde); font-weight: 700; }
         .vuoto { color: #888; text-align: center; margin-top: 24px; list-style: none; }
@@ -77,7 +83,7 @@
     </style>
 </head>
 <body>
-    <header><span>TennisTavolo</span><span id="stato"></span></header>
+    <header><span>TennisTavolo<span id="ambiente"></span></span><span id="stato"></span></header>
     <div id="aggiorna" hidden>Nuova versione disponibile — tocca qui per aggiornare</div>
     <main id="vista"><p class="vuoto">Caricamento…</p></main>
     <nav id="nav" hidden>
@@ -89,13 +95,13 @@
 
 <!-- Il ?v= deve essere UGUALE a VERSIONE in sw.js e va aumentato a ogni
      modifica di un file: e' cosi' che i telefoni scaricano la versione nuova. -->
-    <script src="config.js?v=3.9.4"></script>
-    <script src="store.js?v=3.9.4"></script>
-    <script src="cloud.js?v=3.9.4"></script>
-    <script src="sync.js?v=3.9.4"></script>
-    <script src="app.js?v=3.9.4"></script>
-    <script src="incontri.js?v=3.9.4"></script>
-    <script src="rosa.js?v=3.9.4"></script>
-    <script src="atleti.js?v=3.9.4"></script>
+    <script src="config.js?v=3.9.5"></script>
+    <script src="store.js?v=3.9.5"></script>
+    <script src="cloud.js?v=3.9.5"></script>
+    <script src="sync.js?v=3.9.5"></script>
+    <script src="app.js?v=3.9.5"></script>
+    <script src="incontri.js?v=3.9.5"></script>
+    <script src="rosa.js?v=3.9.5"></script>
+    <script src="atleti.js?v=3.9.5"></script>
 </body>
 </html>

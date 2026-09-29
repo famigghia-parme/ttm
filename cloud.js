@@ -5,14 +5,18 @@
 //   e.offline  = rete assente o Supabase irraggiungibile
 //   e.sessione = login scaduto o revocato: serve rifare l'accesso
 
+// Un accesso per ambiente (store.js: AMBIENTE): passando da Prova a Reale
+// non si esce dall'altro.
+const CHIAVE_SESSIONE = PROVA ? 'ttm.sessione.prova' : 'ttm.sessione';
+
 const Cloud = {
-    sessione: (() => { try { return JSON.parse(localStorage.getItem('ttm.sessione') || 'null'); } catch { return null; } })(),
+    sessione: (() => { try { return JSON.parse(localStorage.getItem(CHIAVE_SESSIONE) || 'null'); } catch { return null; } })(),
 
     _salva(s) {
         this.sessione = s;
         try {
-            if (s) localStorage.setItem('ttm.sessione', JSON.stringify(s));
-            else localStorage.removeItem('ttm.sessione');
+            if (s) localStorage.setItem(CHIAVE_SESSIONE, JSON.stringify(s));
+            else localStorage.removeItem(CHIAVE_SESSIONE);
         } catch { }
     },
 

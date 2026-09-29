@@ -6,6 +6,32 @@
 // 'outbox' = righe modificate sul telefono e non ancora inviate.
 // 'meta'   = segni di avanzamento del sync e impostazioni locali.
 
+// ---------------- ambiente Reale / Prova ----------------
+// Come le due cartelle dati del PC: ogni ambiente ha il suo progetto
+// Supabase (config.js), il suo IndexedDB e il suo accesso. Si sceglie al
+// login o da Account; il cambio ricarica la pagina (niente dati mescolati
+// in memoria). CONFIG.SUPABASE_URL/KEY sono quelli dell'ambiente scelto.
+const ambienteConfigurato = a => {
+    const c = CONFIG.AMBIENTI?.[a];
+    return !!c && /^https?:\/\/.+/.test(c.SUPABASE_URL || '') &&
+        !c.SUPABASE_URL.includes('INSERISCI') && !(c.SUPABASE_KEY || '').includes('INSERISCI');
+};
+const AMBIENTI_PRONTI = ['reale', 'prova'].filter(ambienteConfigurato);
+const AMBIENTE = (() => {
+    let a = null;
+    try { a = localStorage.getItem('ttm.ambiente'); } catch { }
+    return AMBIENTI_PRONTI.includes(a) ? a : (AMBIENTI_PRONTI[0] || 'reale');
+})();
+const PROVA = AMBIENTE === 'prova';
+if (CONFIG.AMBIENTI?.[AMBIENTE]) Object.assign(CONFIG, CONFIG.AMBIENTI[AMBIENTE]);
+
+// Solo la scelta: i dati dell'ambiente lasciato restano sul telefono,
+// compresi quelli non ancora inviati (partiranno al ritorno).
+function cambiaAmbiente(a) {
+    try { localStorage.setItem('ttm.ambiente', a); } catch { }
+    location.reload();
+}
+
 // Ordine di dipendenza (prima i padri): lo stesso del SyncService sul PC.
 const TABELLE = ['societa', 'campionati', 'atleti', 'atleti_societa', 'squadre', 'atleti_squadre',
     'giornate', 'incontri', 'partite', 'sets', 'log_punti', 'formazioni'];
@@ -38,7 +64,8 @@ function minimoRosa(formula) {
     return formula === 'Courbillon' || formula === 'CsiCorbillon' ? 2 : 3;
 }
 
-const DB_NOME = 'ttm';
+// Reale resta 'ttm' (il nome di sempre): chi aveva gia' scaricato non riparte da zero.
+const DB_NOME = PROVA ? 'ttm-prova' : 'ttm';
 const DB_VERSIONE = 1;
 let _db = null;
 
