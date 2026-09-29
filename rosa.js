@@ -91,7 +91,7 @@ async function rsApri(uidSquadra) {
     const lim = CONFIG.ROSA[societa?.tipo] || CONFIG.ROSA.FITET;
     rs = {
         uid: uidSquadra, squadra: squadra.nome, campionato: campionato.nome, stagione: stag,
-        min: lim.min, max: lim.max, atleti: elenco,
+        min: minimoRosa(campionato.formula), max: lim.max, atleti: elenco,
         femminile: /femminile/i.test(campionato.nome)
     };
     rsSesso = rs.femminile ? 'F' : '';
@@ -186,7 +186,9 @@ function rsSposta(uid) {
 // esce diventa eliminato, chi entra riprende la sua vecchia riga se c'e'.
 async function rsSalva() {
     const voluti = new Set(rs.atleti.filter(a => a.inRosa).map(a => a.uid));
-    if (voluti.size < rs.min) { msg(`Servono almeno ${rs.min} atleti in rosa.`); return; }
+    // Sotto il minimo per giocare: avviso, non blocco (come sul PC).
+    if (voluti.size < rs.min &&
+        !confirm(`In rosa ci sono ${voluti.size} atleti: per giocare ne servono almeno ${rs.min}.\nSalvare comunque?`)) return;
     if (rs.max > 0 && voluti.size > rs.max) { msg(`Massimo ${rs.max} atleti in rosa.`); return; }
 
     // Tutte le righe, anche quelle eliminate: si riusano

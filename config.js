@@ -11,9 +11,10 @@ const CONFIG = {
     // Da forzare (es. '2026/27') solo se quella dedotta non e' giusta.
     STAGIONE: '',
 
-    // Limiti rosa: gli stessi di config.json sul PC. 0 = nessun massimo.
+    // Massimo in rosa: lo stesso di config.json sul PC. 0 = nessun massimo.
+    // Il minimo dipende dalla formula del campionato (minimoRosa in store.js).
     ROSA: {
-        FITET: { min: 3, max: 0 },
-        CSI: { min: 3, max: 0 }
+        FITET: { max: 0 },
+        CSI: { max: 0 }
     }
 };

@@ -26,7 +26,17 @@ const INDICI = {
 // Il resto e' calendario: lo scrive solo il PC.
 const GARA_INCONTRO = ['squadra_lettere_abc_uid', 'colore_maglia_casa', 'colore_maglia_ospite',
     'ora_presentazione_casa', 'ora_presentazione_ospite', 'ora_inizio', 'ora_fine',
-    'stato', 'punti_casa', 'punti_ospite', 'punti_class_casa', 'punti_class_ospite'];
+    'stato', 'punti_casa', 'punti_ospite', 'punti_class_casa', 'punti_class_ospite',
+    // dati del referto: stessi di SyncService.ColonneGaraIncontro e del grant in rls.sql
+    'tavolo', 'palline', 'giudice_arbitro', 'qualifica_arbitro',
+    'defibrillatore', 'operatore_dae', 'provvedimenti_disciplinari'];
+
+// Minimo di atleti in rosa per poter giocare = titolari della formula del
+// campionato. Come FormuleGioco.MinimoRosa sul PC: Courbillon 2, le altre 3.
+// formula arriva dal cloud come nome dell'enum (CodiceFormula).
+function minimoRosa(formula) {
+    return formula === 'Courbillon' || formula === 'CsiCorbillon' ? 2 : 3;
+}
 
 const DB_NOME = 'ttm';
 const DB_VERSIONE = 1;

@@ -32,6 +32,14 @@ const Sync = {
         this.avvisi = [];
         this._imposta('corso', 'Sincronizzazione…');
         try {
+            // Cloud azzerato (reset.sql) dopo l'ultimo giro: i dati locali
+            // sono di un altro database e nessun pull li toglierebbe mai.
+            // Si svuota tutto e si riparte, anche la coda da inviare.
+            if (await cloudCambiato()) {
+                await svuotaDb();
+                location.reload();
+                return;
+            }
             await push(this.avvisi);
             const ricevute = await pull(this.avvisi);
             this.ultimoOk = new Date();
@@ -54,6 +62,20 @@ const Sync = {
         document.dispatchEvent(new Event('ttm-stato'));
     }
 };
+
+// ----------------------------------------------------------------
+// ISTANZA: uid del database cloud (tabella istanza). Il primo valore
+// visto si ricorda; se cambia, il cloud e' stato azzerato.
+// ----------------------------------------------------------------
+async function cloudCambiato() {
+    const r = await Cloud.rest('GET', 'istanza?select=uid');
+    if (!r.ok || !r.json?.length) return false;      // tabella assente (schema vecchio): nessun controllo
+    const uid = r.json[0].uid;
+    const noto = await metaLeggi('istanza');
+    if (noto && noto !== uid) return true;
+    if (!noto) await metaScrivi('istanza', uid);
+    return false;
+}
 
 // ----------------------------------------------------------------
 // PUSH

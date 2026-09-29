@@ -40,11 +40,14 @@ async function inElenco() {
     // Solo i nostri, se ne esiste almeno uno marcato (stessa regola del PC)
     if (!inTutti && lista.some(x => x.nostro)) lista = lista.filter(x => x.nostro);
 
+    // Due schede separate: "Da giocare" (prima la piu' vicina) e "Giocate"
+    // (prima la piu' recente). Una lista per volta: niente scorrimento
+    // lungo per arrivare alle gare giocate. inPassate = scheda Giocate.
     const t = x => x.i.data_ora ? Date.parse(x.i.data_ora) : Infinity;
     const da = lista.filter(x => !x.terminato).sort((a, b) => t(a) - t(b));
-    const fatte = inPassate
-        ? lista.filter(x => x.terminato).sort((a, b) => (t(b) === Infinity ? 0 : t(b)) - (t(a) === Infinity ? 0 : t(a)))
-        : [];
+    const fatte = lista.filter(x => x.terminato)
+        .sort((a, b) => (t(b) === Infinity ? 0 : t(b)) - (t(a) === Infinity ? 0 : t(a)));
+    const mostrate = inPassate ? fatte : da;
     const scaricati = await metaLeggi('scaricati', []);
 
     const voce = x => `
@@ -58,13 +61,17 @@ async function inElenco() {
     c.innerHTML = `
       <label class="flagTutti"><input type="checkbox" id="chkTutti"${inTutti ? ' checked' : ''}>
         Mostra anche gli incontri delle altre squadre</label>
-      <label class="flagTutti"><input type="checkbox" id="chkPassate"${inPassate ? ' checked' : ''}>
-        Mostra anche le gare giocate</label>
-      ${da.length ? '<ul>' + da.map(voce).join('') + '</ul>' : '<p class="vuoto">Nessun incontro da giocare</p>'}
-      ${fatte.length ? '<h4>Gare giocate</h4><ul>' + fatte.map(voce).join('') + '</ul>' : ''}`;
+      <div class="tabs">
+        <button id="tabDa"${inPassate ? '' : ' class="att"'}>Da giocare (${da.length})</button>
+        <button id="tabFatte"${inPassate ? ' class="att"' : ''}>Giocate (${fatte.length})</button>
+      </div>
+      ${mostrate.length ? '<ul>' + mostrate.map(voce).join('') + '</ul>'
+            : `<p class="vuoto">${inPassate ? 'Nessuna gara giocata' : 'Nessun incontro da giocare'}</p>`}`;
 
     $('#chkTutti').onchange = e => { inTutti = e.target.checked; try { localStorage.setItem('ttm.tuttiIncontri', inTutti ? '1' : '0'); } catch { } inElenco(); };
-    $('#chkPassate').onchange = e => { inPassate = e.target.checked; try { localStorage.setItem('ttm.passateIncontri', inPassate ? '1' : '0'); } catch { } inElenco(); };
+    const scheda = v => { inPassate = v; try { localStorage.setItem('ttm.passateIncontri', v ? '1' : '0'); } catch { } inElenco(); };
+    $('#tabDa').onclick = () => scheda(false);
+    $('#tabFatte').onclick = () => scheda(true);
     c.querySelectorAll('li[data-uid]').forEach(li => li.onclick = () => inScheda(li.dataset.uid));
 }
 
