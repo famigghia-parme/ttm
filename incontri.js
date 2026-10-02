@@ -31,6 +31,7 @@ async function datiIncontri() {
             i, c, casa, ospite,
             nostro: !!(casa?.nostra_squadra || ospite?.nostra_squadra),
             terminato: i.stato === 'Terminato',
+            quando: i.data_ora || null,       // per prossimoGiorno
             // per htmlGruppi: federazione > campionato > girone
             tipo: c?.tipo, campionato: c?.nome, girone: casa?.girone || ospite?.girone || ''
         };
@@ -42,6 +43,8 @@ async function inElenco() {
     const c = $('#inCorpo');
     if (!c) return;
     let lista = await datiIncontri();
+    // "Prossimi" guarda sempre e solo le nostre squadre, anche con "tutti" attivo
+    const prossimi = inPassate ? null : prossimoGiorno(lista.filter(x => !x.terminato));
     // Solo i nostri, se ne esiste almeno uno marcato (stessa regola del PC)
     if (!inTutti && lista.some(x => x.nostro)) lista = lista.filter(x => x.nostro);
 
@@ -65,9 +68,8 @@ async function inElenco() {
       </li>`;
 
     // Tanti incontri: raggruppati per federazione > campionato > girone
-    // (htmlGruppi in app.js). Sopra, nella scheda "Da giocare", i primi tre
-    // in ordine di data: il giorno della gara si trova subito.
-    const prossimi = !inPassate && da.length > 3 ? da.filter(x => x.i.data_ora).slice(0, 3) : [];
+    // (htmlGruppi in app.js). Sopra, nella scheda "Da giocare", il gruppo
+    // "Prossimi": tutte le nostre gare del prossimo giorno di gara.
 
     c.innerHTML = `
       <label class="flagTutti"><input type="checkbox" id="chkTutti"${inTutti ? ' checked' : ''}>
@@ -76,7 +78,7 @@ async function inElenco() {
         <button id="tabDa"${inPassate ? '' : ' class="att"'}>Da giocare (${da.length})</button>
         <button id="tabFatte"${inPassate ? ' class="att"' : ''}>Giocate (${fatte.length})</button>
       </div>
-      ${prossimi.length ? '<h4>Prossimi</h4><ul>' + prossimi.map(x => voce(x, true)).join('') + '</ul>' : ''}
+      ${htmlProssimi(prossimi, x => voce(x, true))}
       ${mostrate.length ? htmlGruppi('incontri', mostrate, x => voce(x))
             : `<p class="vuoto">${inPassate ? 'Nessuna gara giocata' : 'Nessun incontro da giocare'}</p>`}`;
     agganciaGruppi('incontri', c);

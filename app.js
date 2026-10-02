@@ -114,9 +114,40 @@ function htmlGruppi(vista, voci, htmlVoce) {
     return h;
 }
 
+// "Prossimi": gli incontri delle NOSTRE squadre nel prossimo giorno di gara
+// (oggi compreso), tutti insieme in un gruppo richiudibile come quelli dei
+// gironi. voci = incontri non terminati con { nostro, quando } dove quando
+// e' la data-ora (ISO locale) o null. Ritorna { giorno: 'sab 10/10', voci }
+// in ordine di ora, oppure null se non c'e' nessuna gara in arrivo.
+function prossimoGiorno(voci) {
+    const oggi = new Date(); oggi.setHours(0, 0, 0, 0);
+    const futuri = voci.filter(v => v.nostro && v.quando && new Date(v.quando) >= oggi)
+        .sort((a, b) => new Date(a.quando) - new Date(b.quando));
+    if (!futuri.length) return null;
+    const giorno = new Date(futuri[0].quando).toDateString();
+    return {
+        giorno: new Date(futuri[0].quando).toLocaleDateString('it-IT', { weekday: 'short', day: '2-digit', month: '2-digit' }),
+        voci: futuri.filter(v => new Date(v.quando).toDateString() === giorno)
+    };
+}
+
+// Aperto finche' l'utente non lo chiude (al contrario dei gironi).
+function htmlProssimi(p, htmlVoce) {
+    if (!p) return '';
+    let chiuso = false;
+    try { chiuso = localStorage.getItem('ttm.prossimiChiusi') === '1'; } catch { }
+    return `<details class="gr prossimi" data-k="*prossimi"${chiuso ? '' : ' open'}>
+      <summary><b>Prossimi</b> · ${esc(p.giorno)}<span>${p.voci.length}</span></summary>
+      <ul>${p.voci.map(htmlVoce).join('')}</ul></details>`;
+}
+
 // Da chiamare dopo aver messo l'html nella pagina: ricorda i gruppi aperti.
 function agganciaGruppi(vista, contenitore) {
     contenitore.querySelectorAll('details.gr').forEach(d => d.addEventListener('toggle', () => {
+        if (d.dataset.k === '*prossimi') {
+            try { localStorage.setItem('ttm.prossimiChiusi', d.open ? '0' : '1'); } catch { }
+            return;
+        }
         const aperti = new Set(gruppiAperti(vista));
         if (d.open) aperti.add(d.dataset.k); else aperti.delete(d.dataset.k);
         try { localStorage.setItem('ttm.gruppi.' + vista, JSON.stringify([...aperti])); } catch { }
