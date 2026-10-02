@@ -1,8 +1,8 @@
 // TennisTavoloManager - incontri.js  (PWA cloud)
 // Elenco incontri della stagione e scheda dell'incontro, tutto dai dati
-// locali: funziona anche offline. Dalla scheda si scarica il punto per
-// punto per la gara e si apre la Formazione (formazione.js, che disegna
-// qui dentro). Il punteggio dal telefono arriva con il prossimo passo.
+// locali: funziona anche offline. Dalla scheda si aprono la Formazione
+// (formazione.js) e i Punti (live.js), che disegnano qui dentro, e si
+// scarica il punto per punto per la gara.
 
 let inTutti = false, inPassate = false, inAperto = null;
 try {
@@ -12,10 +12,14 @@ try {
 
 viste.incontri = {
     html: '<div id="inCorpo"></div>',
-    init: () => { inAperto = null; fz = null; fzModificata = false; inElenco(); },
-    // Formazione aperta: con modifiche non salvate non si ridisegna nulla
-    // (si perderebbero); senza, si ricarica con i dati nuovi.
-    suDati: () => fz ? (fzModificata ? null : fzApri(fz.uid, fz.sel, true))
+    init: () => { inAperto = null; fz = null; fzModificata = false; fzRitorno = null; lvLascia(); inElenco(); },
+    // Si passa a un'altra vista (Rosa, Atleti, Account): i Punti si chiudono.
+    esci: () => lvLascia(),
+    // Punti aperti: si ridisegnano dai dati locali (solo se e' cambiato
+    // qualcosa). Formazione aperta: con modifiche non salvate non si
+    // ridisegna nulla (si perderebbero); senza, si ricarica con i dati nuovi.
+    suDati: () => lv ? lvDisegna()
+        : fz ? (fzModificata ? null : fzApri(fz.uid, fz.sel, true))
         : inAperto ? inScheda(inAperto) : inElenco()
 };
 
@@ -150,6 +154,7 @@ async function inScheda(uid) {
         <b>${esc(x.ospite?.nome)}</b></div>
       <div class="lvInfo">${esc([dataBreve(i.data_ora), x.c.nome, i.luogo].filter(Boolean).join(' · '))}</div>
       ${x.terminato ? '' : `
+        <button class="pieno" id="inPunti">🏓 Segna i punti</button>
         <button class="pieno" id="inFormazione">✏️ Formazione</button>
         <button class="pieno chiaro" id="inScarica">${scaricato ? '📥 Scaricato — aggiorna' : '📥 Scarica per la gara'}</button>
         <div class="lvInfo">${scaricato ? 'Ultimo scarico: ' + new Date(scaricato).toLocaleString('it-IT') : 'Da fare prima di partire, con la rete: poi funziona anche senza.'}</div>`}
@@ -158,6 +163,8 @@ async function inScheda(uid) {
       <h4>Formazioni</h4>${squadra(x.casa, true)}${squadra(x.ospite, false)}`;
 
     $('#inIndietro').onclick = inElenco;
+    const bp = $('#inPunti');
+    if (bp) bp.onclick = () => lvApri(uid);
     const bf = $('#inFormazione');
     if (bf) bf.onclick = () => fzApri(uid);
     const b = $('#inScarica');

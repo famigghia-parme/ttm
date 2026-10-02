@@ -66,6 +66,32 @@
         .lvTot small.lvEtic { display: block; font-size: 10px; font-weight: 400; color: var(--grigio); text-align: center; }
         .lvInfo { color: var(--grigio); font-size: 13px; text-align: center; margin: 4px 0; }
 
+        /* Punti (live.js). touch-action: niente zoom da doppio tocco sui pulsanti punto */
+        .lvCampo { display: flex; gap: 8px; margin: 8px 0; }
+        .lvLato { flex: 1; border: 0; border-radius: 14px; color: #fff; padding: 14px 6px; min-height: 42vh;
+                  display: flex; flex-direction: column; justify-content: space-between; align-items: center;
+                  font-family: inherit; touch-action: manipulation; user-select: none; -webkit-user-select: none; }
+        .lvLato.casa { background: #3B82F6; }
+        .lvLato.ospite { background: #EF4444; }
+        .lvLato:active { filter: brightness(.85); }
+        .lvNomi { font-size: 14px; font-weight: 600; text-align: center; word-break: break-word; }
+        .lvPunti { font-size: 88px; font-weight: 800; line-height: 1; }
+        .lvSet { font-size: 15px; opacity: .9; }
+        .lvServe { text-align: center; font-size: 14px; margin: 6px 0; }
+        .lvDom { font-weight: 600; margin: 10px 0 2px; }
+        .lvRadio { display: block; padding: 8px 4px; }
+        .lvRadio input { width: auto; margin-right: 6px; }
+        /* Pallino del servizio: dentro il pulsante, fra punteggio e set. Occupa
+           sempre lo spazio (spento e' trasparente); flex:none perche' senza si
+           schiaccia quando lo spazio e' poco. */
+        .lvDot { width: 26px; height: 26px; border-radius: 50%; margin: 8px auto 6px; background: transparent; flex: none; }
+        .lvDot.on { background: #FBBF24; }
+        /* Selettore della partita */
+        .lvSceltaTit { font-weight: 600; margin: 10px 0 6px; }
+        .lvPart { display: block; width: 100%; text-align: left; margin-bottom: 6px; }
+        .lvPart.fatta { opacity: .5; }
+        .lvPart small { display: block; color: var(--grigio); font-weight: 400; }
+
         .rpPart { padding: 8px 4px; border-bottom: 1px solid #eee; }
         .rpVince { font-weight: 700; color: var(--verde); }
         .rpSq { margin: 10px 0 2px; }
@@ -120,14 +146,16 @@
 
 <!-- Il ?v= deve essere UGUALE a VERSIONE in sw.js e va aumentato a ogni
      modifica di un file: e' cosi' che i telefoni scaricano la versione nuova. -->
-    <script src="config.js?v=3.11.1"></script>
-    <script src="store.js?v=3.11.1"></script>
-    <script src="cloud.js?v=3.11.1"></script>
-    <script src="sync.js?v=3.11.1"></script>
-    <script src="app.js?v=3.11.1"></script>
-    <script src="incontri.js?v=3.11.1"></script>
-    <script src="formazione.js?v=3.11.1"></script>
-    <script src="rosa.js?v=3.11.1"></script>
-    <script src="atleti.js?v=3.11.1"></script>
+    <script src="config.js?v=3.12.0"></script>
+    <script src="store.js?v=3.12.0"></script>
+    <script src="cloud.js?v=3.12.0"></script>
+    <script src="sync.js?v=3.12.0"></script>
+    <script src="app.js?v=3.12.0"></script>
+    <script src="incontri.js?v=3.12.0"></script>
+    <script src="formazione.js?v=3.12.0"></script>
+    <script src="gioco.js?v=3.12.0"></script>
+    <script src="live.js?v=3.12.0"></script>
+    <script src="rosa.js?v=3.12.0"></script>
+    <script src="atleti.js?v=3.12.0"></script>
 </body>
 </html>

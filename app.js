@@ -38,11 +38,27 @@ const VERSIONE_APP = new URL(document.currentScript.src).searchParams.get('v') |
 let vistaCorrente = null;
 
 function mostra(nome) {
+    viste[vistaCorrente]?.esci?.();      // la vista che si lascia chiude le sue cose (Punti)
     vistaCorrente = nome;
     try { localStorage.setItem('ttm.vista', nome); } catch { }
     document.querySelectorAll('nav button').forEach(b => b.classList.toggle('att', b.dataset.v === nome));
     $('#vista').innerHTML = viste[nome].html;
     viste[nome].init?.();
+}
+
+// ---------------- sync dopo una modifica ----------------
+// Di norma una modifica parte subito al cloud. Con i Punti aperti i tocchi
+// sono tanti: Sync.pausaMs (lo imposta live.js) = un giro al massimo ogni
+// tot millisecondi. Il dato e' comunque gia' scritto sul telefono.
+let _syncTimer = null;
+function syncDopoModifica() {
+    if (!Sync.pausaMs) { Sync.esegui(); return; }
+    if (_syncTimer) return;                 // un giro e' gia' in programma
+    _syncTimer = setTimeout(() => { _syncTimer = null; Sync.esegui(); }, Sync.pausaMs);
+}
+function syncSubito() {
+    clearTimeout(_syncTimer); _syncTimer = null;
+    Sync.esegui();
 }
 
 // ---------------- dati comuni alle viste ----------------
@@ -314,7 +330,7 @@ async function avvio() {
         aggiornaStato();
         if (vistaCorrente === 'account' && !Sync.inCorso) viste.account.init();
     });
-    document.addEventListener('ttm-locale', () => { aggiornaStato(); Sync.esegui(); });
+    document.addEventListener('ttm-locale', () => { aggiornaStato(); syncDopoModifica(); });
     // Dati nuovi dal cloud: ridisegna la vista se non si sta modificando nulla
     document.addEventListener('ttm-dati', () => { if (vistaCorrente) viste[vistaCorrente].suDati?.(); });
 

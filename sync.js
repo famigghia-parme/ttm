@@ -20,6 +20,7 @@ const Sync = {
     ultimoOk: null,
     messaggio: '',
     avvisi: [],
+    pausaMs: 0,               // > 0 con i Punti aperti: vedi syncDopoModifica in app.js
     _ancora: false,
 
     async esegui() {
@@ -137,6 +138,11 @@ async function push(avvisi) {
         }
 
         for (const lista of gruppi.values()) {
+            // Punto per punto nell'ordine di gioco: il PC li numera come
+            // arrivano e "annulla ultimo punto" toglie quello col numero piu' alto.
+            if (t === 'log_punti')
+                lista.sort((a, b) => String(a.riga.registrato_il).localeCompare(String(b.riga.registrato_il))
+                    || (a.riga.punteggio_casa + a.riga.punteggio_ospite) - (b.riga.punteggio_casa + b.riga.punteggio_ospite));
             for (let i = 0; i < lista.length; i += LOTTO) {
                 const lotto = lista.slice(i, i + LOTTO);
                 const r = await upsert(t, lotto.map(x => x.riga));
@@ -155,6 +161,14 @@ async function inviaSingola(t, x, avvisi) {
     const r = await upsert(t, [x.riga]);
     if (r.ok) { await togliDaOutbox(x.v); return; }
 
+    // Partita o set gia' creati da un altro dispositivo con un altro uid:
+    // la nostra riga prende quell'uid (vedi adotta).
+    if (r.json?.code === '23505' && CHIAVE_NATURALE[t] && await adotta(t, x)) {
+        avvisi.push(`${t}: riga gia' creata da un altro dispositivo, unita.`);
+        Sync._ancora = true;          // le righe unite partono al giro dopo
+        return;
+    }
+
     // Doppione creato offline su due dispositivi (stesso atleta in rosa,
     // stesso ruolo in formazione): vince la riga gia' nel cloud, la nostra si
     // elimina qui e il pull porta l'altra. Stessa regola del PC.
@@ -168,6 +182,78 @@ async function inviaSingola(t, x, avvisi) {
         return;
     }
     avvisi.push(`${t}: riga non inviata (${descriviErrore(r)}), si riprova al prossimo giro.`);
+}
+
+// ----------------------------------------------------------------
+// ADOZIONE: partite e set hanno una chiave naturale (incontro + ordine,
+// partita + numero) con indice univoco nel cloud. Fra telefoni l'uid e'
+// ricavato dalla chiave (uidDerivato in store.js) e il doppione non nasce;
+// puo' nascere col PC, che usa uid casuali, se crea le stesse righe prima
+// di aver sincronizzato (es. apre il Live sullo stesso incontro).
+// Allora la riga del cloud resta, la nostra ne prende l'uid e le righe
+// figlie (set della partita, punti del set) la seguono.
+// Se la nostra era ancora vuota vale quella del cloud; se qui si e' gia'
+// giocato valgono i nostri dati (i campi che non abbiamo restano i suoi).
+// ----------------------------------------------------------------
+const CHIAVE_NATURALE = { partite: ['incontro_uid', 'ordine'], sets: ['partita_uid', 'numero'] };
+const FIGLIE_DI = { partite: ['sets', 'partita_uid'], sets: ['log_punti', 'set_uid'] };
+const VUOTA = {
+    partite: p => !p.completata && !p.in_corso && p.servizio_iniziale_casa == null && !p.set_vinti_casa && !p.set_vinti_ospite,
+    sets: x => !x.completato && !x.punti_casa && !x.punti_ospite
+};
+
+// Campi che una partita ancora "vuota" puo' comunque avere di suo: gli
+// atleti (dalla formazione salvata sul telefono, o la coppia del doppio).
+const ATLETI_PARTITA = ['atleta_casa1_uid', 'atleta_casa2_uid', 'atleta_ospite1_uid', 'atleta_ospite2_uid',
+    'avversario_ospite1', 'avversario_ospite2'];
+
+async function adotta(t, x) {
+    const [k1, k2] = CHIAVE_NATURALE[t], [tf, fk] = FIGLIE_DI[t];
+    const r = await Cloud.rest('GET', `${t}?select=*&${k1}=eq.${encodeURIComponent(x.riga[k1])}` +
+        `&${k2}=eq.${encodeURIComponent(x.riga[k2])}&eliminato=is.false`);
+    const cl = r.ok ? (r.json || []).find(y => y.uid !== x.riga.uid) : null;
+    if (!cl) return false;
+
+    // Da qui tutto in UNA transazione, rileggendo la nostra riga e le sue
+    // figlie: durante l'invio (tre chiamate di rete) l'utente puo' aver
+    // segnato altri punti, e x.riga e' la fotografia di prima.
+    const db = await apriDb();
+    const ora = adesso();
+    const tx = db.transaction([t, tf, 'outbox'], 'readwrite');
+    const st = tx.objectStore(t), sf = tx.objectStore(tf), ob = tx.objectStore('outbox');
+    const inAttesa = (tab, uid) => ob.put({ chiave: tab + ':' + uid, tabella: tab, uid, rev: ora + Math.random() });
+
+    const mia = await idbReq(st.get(x.riga.uid));
+    if (!mia) { await idbFine(tx); return true; }        // gia' unita in un giro precedente
+    // anche le figlie eliminate: devono poter arrivare al cloud
+    const figlie = await idbReq(sf.index(fk).getAll(mia.uid));
+
+    st.delete(mia.uid);
+    ob.delete(t + ':' + mia.uid);
+    if (VUOTA[t](mia)) {
+        // Nulla di giocato qui: vale la riga del cloud. Restano nostri solo
+        // gli atleti che il cloud non ha (il PC crea le partite senza).
+        const unita = { ...cl };
+        let riempito = false;
+        if (t === 'partite')
+            for (const c of ATLETI_PARTITA) if (unita[c] == null && mia[c] != null) { unita[c] = mia[c]; riempito = true; }
+        if (riempito) { unita.modificato_il = ora; inAttesa(t, cl.uid); }
+        st.put(unita);
+    } else {
+        const unita = { ...cl, ...mia, uid: cl.uid, creato_il: cl.creato_il, modificato_il: ora };
+        for (const c of Object.keys(cl)) if (unita[c] == null && cl[c] != null) unita[c] = cl[c];
+        st.put(unita);
+        inAttesa(t, cl.uid);
+    }
+    for (const f of figlie) {
+        sf.put({ ...f, [fk]: cl.uid, modificato_il: ora });
+        inAttesa(tf, f.uid);
+    }
+    await idbFine(tx);
+    // Chi ha in mano il vecchio uid (la vista Punti) lo cambia
+    document.dispatchEvent(new CustomEvent('ttm-uid', { detail: { tabella: t, da: mia.uid, a: cl.uid } }));
+    document.dispatchEvent(new Event('ttm-dati'));
+    return true;
 }
 
 const descriviErrore = r => `${r.status}${r.json?.message ? ' ' + r.json.message : ''}`;
@@ -198,6 +284,14 @@ async function pull(avvisi) {
 // filtro: condizione PostgREST in piu' (es. set_uid=in.(...))
 async function pullTabella(t, filtro, chiaveMeta) {
     const segno = chiaveMeta ? await metaLeggi(chiaveMeta) : null;
+    const r = await pullDa(t, filtro, segno);
+    if (chiaveMeta && r.massimo) await metaScrivi(chiaveMeta, r.massimo);
+    return r.totale;
+}
+
+// Righe con sincronizzato_il dopo `segno` (meno il margine). Ritorna quante
+// sono cambiate qui e il sincronizzato_il piu' alto visto (il nuovo segno).
+async function pullDa(t, filtro, segno) {
     const da = segno ? new Date(Date.parse(segno) - MARGINE_MS).toISOString() : '1970-01-01T00:00:00Z';
     let massimo = segno, offset = 0, totale = 0;
 
@@ -216,8 +310,7 @@ async function pullTabella(t, filtro, chiaveMeta) {
         if (righe.length < PAGINA) break;
         offset += PAGINA;
     }
-    if (chiaveMeta && massimo) await metaScrivi(chiaveMeta, massimo);
-    return totale;
+    return { totale, massimo };
 }
 
 // Scrive nel db locale le righe arrivate dal cloud, rispettando le modifiche
@@ -274,28 +367,57 @@ async function setDiIncontro(uidIncontro) {
     return set.map(s => s.uid);
 }
 
+// Log punti dei set indicati, a pezzi da 40 uid (l'indirizzo della
+// richiesta resta sotto i limiti). Il segno e' uno solo per tutti i pezzi:
+// si legge prima e si scrive alla fine, altrimenti il primo pezzo
+// farebbe saltare righe al secondo.
+async function pullLogDeiSet(uidSet, chiaveMeta) {
+    const segno = chiaveMeta ? await metaLeggi(chiaveMeta) : null;
+    let n = 0, massimo = segno;
+    for (let i = 0; i < uidSet.length; i += 40) {
+        const r = await pullDa('log_punti', `set_uid=in.(${uidSet.slice(i, i + 40).join(',')})`, segno);
+        n += r.totale;
+        if (r.massimo && (!massimo || Date.parse(r.massimo) > Date.parse(massimo))) massimo = r.massimo;
+    }
+    if (chiaveMeta && massimo) await metaScrivi(chiaveMeta, massimo);
+    return n;
+}
+
+// A ogni giro solo i punti NUOVI degli incontri scaricati (prima si
+// riscaricava tutto il log ogni volta: con i Punti aperti il giro e'
+// frequente). Un incontro segnato senza essere mai stato scaricato per
+// intero (Punti aperti senza rete) si scarica tutto, una volta.
 async function pullLogPunti() {
     const scaricati = await metaLeggi('scaricati', []);
     if (!scaricati.length) return 0;
-    const uidSet = [];
-    for (const u of scaricati) uidSet.push(...await setDiIncontro(u));
     let n = 0;
-    // Pezzi da 40 uid: l'indirizzo della richiesta resta sotto i limiti
-    for (let i = 0; i < uidSet.length; i += 40)
-        n += await pullTabella('log_punti', `set_uid=in.(${uidSet.slice(i, i + 40).join(',')})`, null);
-    return n;
+    const uidSet = [];
+    for (const u of scaricati) {
+        const suoi = await setDiIncontro(u);
+        if (!await metaLeggi('scaricato.' + u)) {
+            n += await pullLogDeiSet(suoi, null);
+            await metaScrivi('scaricato.' + u, adesso());
+        }
+        uidSet.push(...suoi);
+    }
+    return n + await pullLogDeiSet(uidSet, 'pull.log_punti');
+}
+
+// Mette l'incontro fra quelli di cui si tiene il punto per punto, senza
+// usare la rete (lo fa la vista Punti all'apertura). Il log gia' nel cloud
+// arriva al primo giro di sync.
+async function segnaPerLaGara(uidIncontro) {
+    const scaricati = await metaLeggi('scaricati', []);
+    if (scaricati.includes(uidIncontro)) return;
+    scaricati.push(uidIncontro);
+    await metaScrivi('scaricati', scaricati.slice(-10));     // gli ultimi 10 bastano
+    await metaScrivi('scaricato.' + uidIncontro, null);      // da scaricare per intero
 }
 
 // Tocco su "Scarica per la gara": ricorda l'incontro e scarica subito
 // tutto il suo punto per punto (anche quello piu' vecchio del segno).
 async function scaricaIncontro(uidIncontro) {
-    const scaricati = await metaLeggi('scaricati', []);
-    if (!scaricati.includes(uidIncontro)) {
-        scaricati.push(uidIncontro);
-        await metaScrivi('scaricati', scaricati.slice(-10));     // gli ultimi 10 bastano
-    }
-    const uidSet = await setDiIncontro(uidIncontro);
-    for (let i = 0; i < uidSet.length; i += 40)
-        await pullTabella('log_punti', `set_uid=in.(${uidSet.slice(i, i + 40).join(',')})`, null);
+    await segnaPerLaGara(uidIncontro);
+    await pullLogDeiSet(await setDiIncontro(uidIncontro), null);
     await metaScrivi('scaricato.' + uidIncontro, adesso());
 }

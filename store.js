@@ -59,20 +59,38 @@ const GARA_INCONTRO = ['squadra_lettere_abc_uid', 'colore_maglia_casa', 'colore_
 
 // Formule di gioco: cio' che serve al telefono di FormuleGioco.cs del PC.
 // Chiave = nome dell'enum CodiceFormula, come arriva dal cloud in
-// campionati.formula. titolari/riserve = NumTitolari / NumRiserve;
-// doppio: 'libero' = la coppia si sceglie, 'fisso' = la decide la formula
-// (Olimpica), null = nessun doppio.
+// campionati.formula.
+//  titolari/riserve = NumTitolari / NumRiserve;
+//  doppio: 'libero' = la coppia si sceglie, 'fisso' = la decide la formula
+//          (Olimpica: doppioPosti dice quali posti la compongono), null =
+//          nessun doppio;
+//  punti: regola dei punti in classifica (Gioco.puntiClassifica);
+//  dueTavoli = SupportaDueTavoli;
+//  partite: la sequenza dell'incontro, nell'ordine di gioco. Serve a creare
+//          le partite dal telefono quando il PC non le ha ancora create.
+//          S(postoAbc, postoXyz, fase, tavolo con due tavoli), D(fase, tavolo).
 // Se sul PC cambia una formula va cambiata anche qui: il confronto si fa
 // con Tools/TestPwaCloud (formule.json generato dal C#).
+const S = (abc, xyz, fase, tavolo2 = 1) => ({ tipo: 'Singolo', posto_abc: abc, posto_xyz: xyz, fase, tavolo2 });
+const D = (fase, tavolo2 = 1) => ({ tipo: 'Doppio', posto_abc: 'Doppio', posto_xyz: 'Doppio', fase, tavolo2 });
 const FORMULE = {
-    Courbillon:           { titolari: 2, riserve: 3, doppio: 'libero' },
-    MiniSwaythling:       { titolari: 3, riserve: 2, doppio: null },
-    NewSwaythling:        { titolari: 3, riserve: 2, doppio: null },
-    Olimpica:             { titolari: 3, riserve: 2, doppio: 'fisso' },
-    MiniSwaythlingDoppio: { titolari: 3, riserve: 3, doppio: 'libero' },
-    CSIFormula:           { titolari: 3, riserve: 2, doppio: null },
-    CsiCorbillon:         { titolari: 2, riserve: 2, doppio: 'libero' }
+    Courbillon: { titolari: 2, riserve: 3, doppio: 'libero', punti: 'standard', dueTavoli: false,
+        partite: [S('A', 'A', 1), S('B', 'B', 1), D(2), S('A', 'B', 3), S('B', 'A', 3)] },
+    MiniSwaythling: { titolari: 3, riserve: 2, doppio: null, punti: 'standard', dueTavoli: true,
+        partite: [S('A', 'A', 1, 1), S('B', 'B', 1, 2), S('C', 'C', 1, 1), S('B', 'A', 2, 2), S('A', 'C', 2, 1), S('C', 'B', 2, 2)] },
+    NewSwaythling: { titolari: 3, riserve: 2, doppio: null, punti: 'standard', dueTavoli: false,
+        partite: [S('A', 'A', 1), S('B', 'B', 1), S('C', 'C', 1), S('A', 'B', 2), S('B', 'A', 2)] },
+    Olimpica: { titolari: 3, riserve: 2, doppio: 'fisso', doppioPosti: ['B', 'C'], punti: 'standard', dueTavoli: false,
+        partite: [D(1), S('A', 'A', 2), S('C', 'C', 2), S('A', 'B', 3), S('B', 'A', 3)] },
+    MiniSwaythlingDoppio: { titolari: 3, riserve: 3, doppio: 'libero', punti: 'miniDoppio', dueTavoli: true,
+        partite: [S('A', 'A', 1, 1), S('B', 'B', 1, 2), S('C', 'C', 1, 1), D(2, 1), S('B', 'A', 3, 1), S('A', 'C', 3, 2), S('C', 'B', 3, 1)] },
+    CSIFormula: { titolari: 3, riserve: 2, doppio: null, punti: 'vinte', dueTavoli: false,
+        partite: [S('A', 'A', 1), S('B', 'B', 1), S('C', 'C', 1), S('B', 'A', 2), S('A', 'C', 2), S('C', 'B', 2)] },
+    CsiCorbillon: { titolari: 2, riserve: 2, doppio: 'libero', punti: 'vinte', dueTavoli: true,
+        partite: [S('A', 'A', 1, 1), S('B', 'B', 1, 2), D(2, 1), S('A', 'B', 3, 1), S('B', 'A', 3, 2)] }
 };
+// Partite da vincere per chiudere l'incontro (FormulaGioco.PartitePerChiudere)
+const partitePerChiudere = f => Math.floor(f.partite.length / 2) + 1;
 // Formula sconosciuta: stessa di riserva del PC (Mini Swaythling con doppio).
 const formulaDi = nome => FORMULE[nome] || FORMULE.MiniSwaythlingDoppio;
 
@@ -173,6 +191,91 @@ async function scriviLocale(righe) {
     }
     await idbFine(tx);
     document.dispatchEvent(new Event('ttm-locale'));
+}
+
+// ---------------- partite dell'incontro ----------------
+// Uid ricavato da un altro uid + un numero. Due telefoni che creano offline
+// la stessa cosa (le partite di un incontro, il set N di una partita)
+// ottengono lo STESSO uid: nel cloud diventano la stessa riga invece di due
+// doppioni rifiutati dall'indice univoco. Si sommano n agli ultimi 12
+// caratteri (48 bit: stanno in un numero JavaScript senza perdere cifre).
+function uidDerivato(base, n) {
+    const m = /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-)([0-9a-f]{12})$/i.exec(base);
+    if (!m) return `${base}~${n}`;          // uid non standard: solo nei test
+    const v = (parseInt(m[2], 16) + n) % 2 ** 48;
+    return m[1] + v.toString(16).padStart(12, '0');
+}
+const uidPartita = (uidIncontro, ordine) => uidDerivato(uidIncontro, ordine * 256);
+const uidSet = (uidPartita_, numero) => uidDerivato(uidPartita_, numero);
+
+// Data e ora LOCALI senza fuso, come le scrive il PC nelle colonne
+// "timestamp" (creato_il, registrato_il): "2026-10-02T20:31:05.123".
+function oraLocale(d = new Date()) {
+    const z = (n, l = 2) => String(n).padStart(l, '0');
+    return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}T` +
+        `${z(d.getHours())}:${z(d.getMinutes())}:${z(d.getSeconds())}.${z(d.getMilliseconds(), 3)}`;
+}
+
+// Atleti di una partita presi dalla formazione. posto_abc / posto_xyz sono
+// posizionali: si traducono in atleti passando per la squadra che ha
+// scelto le lettere ABC, che non e' per forza quella di casa.
+// posti = { <uid squadra>: { A: uid atleta, B: ..., C: ... } }.
+// Il doppio libero NON sta nella formazione (si dichiara sulla partita):
+// qui torna null e chi chiama lascia la coppia com'e'.
+function atletiDaFormazione(p, inc, formula, posti) {
+    const abcInCasa = inc.squadra_lettere_abc_uid !== inc.squadra_ospite_uid;
+    const dellaCasa = posti[inc.squadra_casa_uid] || {}, dellOspite = posti[inc.squadra_ospite_uid] || {};
+    const titolare = (sq, posto) => ['A', 'B', 'C'].includes(posto) ? (sq[posto] || null) : null;
+    if (p.tipo === 'Doppio') {
+        const pp = formula.doppio === 'fisso' ? formula.doppioPosti : null;
+        if (!pp) return null;
+        return { atleta_casa1_uid: titolare(dellaCasa, pp[0]), atleta_casa2_uid: titolare(dellaCasa, pp[1]),
+            atleta_ospite1_uid: titolare(dellOspite, pp[0]), atleta_ospite2_uid: titolare(dellOspite, pp[1]) };
+    }
+    const a = titolare(abcInCasa ? dellaCasa : dellOspite, p.posto_abc);
+    const x = titolare(abcInCasa ? dellOspite : dellaCasa, p.posto_xyz);
+    return { atleta_casa1_uid: abcInCasa ? a : x, atleta_casa2_uid: null,
+        atleta_ospite1_uid: abcInCasa ? x : a, atleta_ospite2_uid: null };
+}
+
+// Le partite dell'incontro; se non esistono ancora le crea dalla formula
+// del campionato, come DatabaseService.CreaPartiteAsync sul PC. Serve
+// quando l'incontro arriva dal calendario e sul PC non e' mai stato aperto:
+// in palestra il PC non c'e'. Gli atleti si prendono dalla formazione gia'
+// salvata. Un incontro terminato senza partite (risultato importato) resta
+// senza. Ritorna le partite vive.
+async function assicuraPartite(uidIncontro) {
+    const vive = await perIndice('partite', 'incontro_uid', uidIncontro);
+    if (vive.length) return vive;
+    const inc = await leggi('incontri', uidIncontro);
+    if (!inc || inc.eliminato || inc.stato === 'Terminato') return [];
+    const giornata = await leggi('giornate', inc.giornata_uid);
+    const camp = giornata && await leggi('campionati', giornata.campionato_uid);
+    if (!camp) return [];
+    const formula = formulaDi(camp.formula);
+
+    const posti = {};
+    for (const r of await perIndice('formazioni', 'incontro_uid', uidIncontro))
+        if (r.atleta_uid && ['A', 'B', 'C'].includes(r.ruolo))
+            (posti[r.squadra_uid] || (posti[r.squadra_uid] = {}))[r.ruolo] = r.atleta_uid;
+
+    const dueTavoli = inc.numero_tavoli === 2 && formula.dueTavoli;
+    const righe = formula.partite.map((d, i) => {
+        const p = {
+            uid: uidPartita(inc.uid, i + 1), incontro_uid: inc.uid, ordine: i + 1,
+            tipo: d.tipo, posto_abc: d.posto_abc, posto_xyz: d.posto_xyz, fase: d.fase,
+            numero_tavolo: dueTavoli ? d.tavolo2 : 1,
+            servizio_iniziale_casa: null, casa_a_sinistra: null,
+            doppio_apertura_casa1: null, doppio_apertura_ospite1: null,
+            atleta_casa1_uid: null, atleta_casa2_uid: null, atleta_ospite1_uid: null, atleta_ospite2_uid: null,
+            avversario_ospite1: null, avversario_ospite2: null,
+            vinta_da_casa: null, set_vinti_casa: 0, set_vinti_ospite: 0,
+            in_corso: false, completata: false, eliminato: false, creato_il: oraLocale()
+        };
+        return { t: 'partite', riga: { ...p, ...(atletiDaFormazione(p, inc, formula, posti) || {}) } };
+    });
+    await scriviLocale(righe);
+    return righe.map(x => x.riga);
 }
 
 // Cancella tutto (logout). Il db si ricrea alla prossima apertura.

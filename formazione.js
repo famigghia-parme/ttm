@@ -28,6 +28,9 @@
 
 let fz = null;             // incontro aperto in modifica (vedi fzApri)
 let fzModificata = false;
+// Dove tornare uscendo o dopo il salvataggio, se non alla scheda: lo usa
+// la vista Punti (live.js) quando manda qui a dichiarare il doppio.
+let fzRitorno = null;
 
 const RUOLI_TITOLARI = ['A', 'B', 'C'];
 const RUOLI_RISERVE = ['Riserva1', 'Riserva2', 'Riserva3'];
@@ -44,22 +47,25 @@ const fzOraCloud = v => v ? v.slice(0, 5) + ':00' : null;
 // cancellare la modifica.
 async function fzApri(uidIncontro, uidSquadra, daSync = false) {
     const inc = await leggi('incontri', uidIncontro);
-    if (!inc || inc.eliminato) { fz = null; inElenco(); return; }
+    if (!inc || inc.eliminato) { fz = null; fzRitorno = null; inElenco(); return; }
     const giornata = await leggi('giornate', inc.giornata_uid);
     const camp = giornata && await leggi('campionati', giornata.campionato_uid);
     const casa = await leggi('squadre', inc.squadra_casa_uid);
     const ospite = await leggi('squadre', inc.squadra_ospite_uid);
     // Incontro chiuso (anche da un altro dispositivo): si torna alla scheda.
-    if (!camp || !casa || !ospite || inc.stato === 'Terminato') { fz = null; fzModificata = false; inScheda(uidIncontro); return; }
+    if (!camp || !casa || !ospite || inc.stato === 'Terminato') { fz = null; fzModificata = false; fzRitorno = null; inScheda(uidIncontro); return; }
 
     const formula = formulaDi(camp.formula);
     const titolari = RUOLI_TITOLARI.slice(0, formula.titolari);
     const riserve = RUOLI_RISERVE.slice(0, formula.riserve);
     const ruoli = [...titolari, ...riserve];
 
+    // Partite non ancora create (incontro mai aperto sul PC): si creano qui,
+    // altrimenti il doppio non si potrebbe dichiarare. Non su una ricarica
+    // da sync: li' si guarda soltanto.
     const [righe, partite, atleti] = await Promise.all([
         perIndice('formazioni', 'incontro_uid', uidIncontro),
-        perIndice('partite', 'incontro_uid', uidIncontro),
+        daSync ? perIndice('partite', 'incontro_uid', uidIncontro) : assicuraPartite(uidIncontro),
         tutti('atleti')]);
     const A = perUid(atleti);
     const doppio = partite.find(p => p.tipo === 'Doppio');
@@ -161,7 +167,7 @@ function fzDisegna() {
       <select data-ruolo="${r}">${fzOpzioni(sq.candidati, sq.posti[r] || null)}</select></label>`;
 
     c.innerHTML = `
-    <button class="pieno chiaro" id="fzIndietro">← Incontro</button>
+    <button class="pieno chiaro" id="fzIndietro">${fzRitorno ? '← Torna ai punti' : '← Incontro'}</button>
     <div class="tabs">${fz.squadre.map(s =>
         `<button data-sq="${s.uid}" class="${s.uid === fz.sel ? 'att' : ''}">${esc(s.nome)}</button>`).join('')}</div>
     <label class="fzRiga"><span>Lettere ABC</span>
@@ -226,9 +232,9 @@ function fzDisegna() {
         b.onclick = () => { fz.sel = b.dataset.sq; fzDisegna(); });
     $('#fzIndietro').onclick = () => {
         if (fzModificata && !confirm('Formazione modificata e non salvata. Uscire lo stesso?')) return;
-        const uid = fz.uid;
-        fz = null; fzModificata = false;
-        inScheda(uid);
+        const uid = fz.uid, ritorno = fzRitorno;
+        fz = null; fzModificata = false; fzRitorno = null;
+        if (ritorno) ritorno(); else inScheda(uid);
     };
     $('#fzSalva').onclick = fzSalva;
 }
@@ -348,32 +354,37 @@ async function fzSalva() {
         }
 
         // ---- 3) riversamento sulle partite non ancora iniziate ----
-        const sqAbc = fz.squadre.find(s => s.uid === fz.abc), sqXyz = fz.squadre.find(s => s.uid !== fz.abc);
-        const abcInCasa = sqAbc.inCasa;
-        const posto = (sq, p) => RUOLI_TITOLARI.includes(p) ? (sq.posti[p] || null) : null;
+        // Singolari e doppio fissato dalla formula (Olimpica): dai posti, con
+        // atletiDaFormazione (store.js). Doppio libero: la coppia scelta qui.
+        const posti = Object.fromEntries(fz.squadre.map(s => [s.uid, s.posti]));
+        const incNuovo = { ...inc, squadra_lettere_abc_uid: fz.abc };
         for (const p of await perIndice('partite', 'incontro_uid', fz.uid)) {
             const set = await perIndice('sets', 'partita_uid', p.uid);
             if (p.completata || set.some(s => s.punti_casa > 0 || s.punti_ospite > 0)) continue;
 
-            let c1, c2, o1, o2;
-            if (p.tipo === 'Doppio') {
-                if (!fz.doppioLibero) continue;      // coppia fissata dalla formula: la mette il PC
-                [c1, c2] = casa.doppio; [o1, o2] = ospite.doppio;
-            } else {
-                const a = posto(sqAbc, p.posto_abc), x = posto(sqXyz, p.posto_xyz);
-                c1 = abcInCasa ? a : x; o1 = abcInCasa ? x : a; c2 = o2 = null;
-            }
-            const dopo = { atleta_casa1_uid: c1 || null, atleta_casa2_uid: c2 || null,
-                atleta_ospite1_uid: o1 || null, atleta_ospite2_uid: o2 || null };
+            const dopo = p.tipo === 'Doppio' && fz.doppioLibero
+                ? { atleta_casa1_uid: casa.doppio[0] || null, atleta_casa2_uid: casa.doppio[1] || null,
+                    atleta_ospite1_uid: ospite.doppio[0] || null, atleta_ospite2_uid: ospite.doppio[1] || null }
+                : atletiDaFormazione(p, incNuovo, fz.formula, posti);
+            if (!dopo) continue;
             if (Object.entries(dopo).some(([k, v]) => (p[k] ?? null) !== v))
                 scritture.push({ t: 'partite', riga: { ...p, ...dopo } });
         }
 
         // Tutto in una transazione: o passa tutto o niente.
         if (scritture.length) await scriviLocale(scritture);
+        const conferma = navigator.onLine ? 'Salvata ✓' : 'Salvata sul telefono ✓ — parte al cloud appena c\'è rete';
+        // Arrivati qui dai Punti (doppio da dichiarare): salvato, si torna la'.
+        if (fzRitorno) {
+            const ritorno = fzRitorno;
+            fz = null; fzModificata = false; fzRitorno = null;
+            await ritorno();
+            avviso(conferma, true);
+            return;
+        }
         const sel = fz.sel;
         await fzApri(fz.uid, sel);
-        msg(navigator.onLine ? 'Salvata ✓' : 'Salvata sul telefono ✓ — parte al cloud appena c\'è rete', true);
+        msg(conferma, true);
     } catch (e) {
         console.error(e);
         msg('Errore nel salvataggio: ' + (e.message || e));
