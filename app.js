@@ -6,7 +6,31 @@
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g,
     c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const msg = (t, ok = false) => { const m = $('#msg'); if (m) { m.style.color = ok ? 'var(--verde)' : ''; m.textContent = t; } };
+
+// Avviso a comparsa sopra la barra in basso: si vede sempre, anche quando
+// #msg e' fuori schermo (in fondo a una lista lunga) o la vista si ridisegna.
+let _avvisoTimer = null;
+function avviso(t, ok = false) {
+    const el = $('#avviso');
+    if (!el) return;
+    el.textContent = t;
+    el.className = ok ? 'ok' : '';
+    el.hidden = false;
+    clearTimeout(_avvisoTimer);
+    _avvisoTimer = setTimeout(() => { el.hidden = true; }, ok ? 2500 : 5000);
+}
+
+// Messaggio della vista (#msg). Le conferme (ok) compaiono SEMPRE anche come
+// avviso; gli errori solo se #msg non e' sullo schermo. Prima il "Salvata"
+// della rosa finiva in fondo alla lista e non si vedeva (02/10).
+function msg(t, ok = false) {
+    const m = $('#msg');
+    if (m) { m.style.color = ok ? 'var(--verde)' : ''; m.textContent = t; }
+    if (!t) return;
+    const r = m?.getBoundingClientRect();
+    const visibile = !!r && r.top >= 0 && r.bottom <= window.innerHeight - 64;   // 64 = barra in basso
+    if (ok || !visibile) avviso(t, ok);
+}
 
 const viste = {};
 // Versione letta dal ?v= con cui index.html carica questo file: un posto in meno da aggiornare
@@ -53,6 +77,50 @@ function dataBreve(s) {
     const d = new Date(s);
     return d.toLocaleDateString('it-IT', { weekday: 'short', day: '2-digit', month: '2-digit' }) + ' ' +
         d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+}
+
+// ---------------- elenchi raggruppati ----------------
+// Tre livelli: federazione (FITET, CSI) > campionato > girone. Ogni gruppo
+// si apre e si chiude con un tocco; quelli aperti si ricordano per vista.
+// Con un solo gruppo non c'e' nulla da scegliere: resta aperto.
+// voci: [{ tipo, campionato, girone, ... }] gia' nell'ordine voluto dentro
+// il gruppo; htmlVoce(voce) -> '<li>...</li>'.
+const ORDINE_FEDERAZIONI = { FITET: 0, CSI: 1 };
+
+function gruppiAperti(vista) {
+    try { return JSON.parse(localStorage.getItem('ttm.gruppi.' + vista) || '[]'); } catch { return []; }
+}
+
+function htmlGruppi(vista, voci, htmlVoce) {
+    const gruppi = new Map();
+    for (const v of voci) {
+        const k = [v.tipo || '', v.campionato || '', v.girone || ''].join('|');
+        if (!gruppi.has(k)) gruppi.set(k, { k, tipo: v.tipo || '', campionato: v.campionato || '', girone: v.girone || '', voci: [] });
+        gruppi.get(k).voci.push(v);
+    }
+    const ordinati = [...gruppi.values()].sort((a, b) =>
+        (ORDINE_FEDERAZIONI[a.tipo] ?? 9) - (ORDINE_FEDERAZIONI[b.tipo] ?? 9)
+        || a.tipo.localeCompare(b.tipo, 'it')
+        || a.campionato.localeCompare(b.campionato, 'it')
+        || a.girone.localeCompare(b.girone, 'it'));
+    const aperti = gruppiAperti(vista);
+    let h = '', fed = null;
+    for (const g of ordinati) {
+        if (g.tipo !== fed) { fed = g.tipo; h += `<h3 class="grFed">${esc(fed || 'Altro')}</h3>`; }
+        h += `<details class="gr" data-k="${esc(g.k)}"${ordinati.length === 1 || aperti.includes(g.k) ? ' open' : ''}>
+          <summary><b>${esc(g.campionato)}</b>${g.girone ? ' · girone ' + esc(g.girone) : ''}<span>${g.voci.length}</span></summary>
+          <ul>${g.voci.map(htmlVoce).join('')}</ul></details>`;
+    }
+    return h;
+}
+
+// Da chiamare dopo aver messo l'html nella pagina: ricorda i gruppi aperti.
+function agganciaGruppi(vista, contenitore) {
+    contenitore.querySelectorAll('details.gr').forEach(d => d.addEventListener('toggle', () => {
+        const aperti = new Set(gruppiAperti(vista));
+        if (d.open) aperti.add(d.dataset.k); else aperti.delete(d.dataset.k);
+        try { localStorage.setItem('ttm.gruppi.' + vista, JSON.stringify([...aperti])); } catch { }
+    }));
 }
 
 // ---------------- barra di stato ----------------

@@ -12,7 +12,7 @@ viste.rosa = {
     html: '<div id="rsCorpo"></div>',
     init: rsElenco,
     // Dati nuovi dal cloud: si ridisegna solo se non ci sono modifiche in corso
-    suDati: () => { if (!rs) rsElenco(); else if (!rsModificata) rsApri(rs.uid); }
+    suDati: () => { if (!rs) rsElenco(); else if (!rsModificata) rsApri(rs.uid, true); }
 };
 
 const SESSO = { 1: 'M', 2: 'F' };
@@ -33,19 +33,22 @@ async function rsElenco() {
             || a.s.nome.localeCompare(b.s.nome, 'it'));
     if (!lista.length) { c.innerHTML = '<p class="vuoto">Nessuna squadra in questa stagione</p>'; return; }
 
-    let h = '', campo = null;
-    for (const { s, c: cp } of lista) {
-        if (cp.nome !== campo) { if (campo !== null) h += '</ul>'; campo = cp.nome; h += `<h4>${esc(campo)}</h4><ul>`; }
-        const n = rose.filter(r => r.squadra_uid === s.uid && r.stagione === cp.stagione).length;
-        h += `<li class="atleta cliccabile" data-uid="${s.uid}">
-          <b>${esc(s.nome)}</b>${s.nostra_squadra ? ' <small class="rsNostra">nostra</small>' : ''}
-          <span>${n} in rosa</span>${s.girone ? `<br><small>girone ${esc(s.girone)}</small>` : ''}</li>`;
-    }
-    c.innerHTML = h + '</ul>';
+    // Federazione > campionato > girone, come gli incontri (htmlGruppi in app.js)
+    const voci = lista.map(({ s, c: cp }) => ({
+        s, tipo: cp.tipo, campionato: cp.nome, girone: s.girone || '',
+        n: rose.filter(r => r.squadra_uid === s.uid && r.stagione === cp.stagione).length
+    }));
+    c.innerHTML = htmlGruppi('rosa', voci, v => `<li class="atleta cliccabile" data-uid="${v.s.uid}">
+          <b>${esc(v.s.nome)}</b>${v.s.nostra_squadra ? ' <small class="rsNostra">nostra</small>' : ''}
+          <span>${v.n} in rosa</span></li>`);
+    agganciaGruppi('rosa', c);
     c.querySelectorAll('li[data-uid]').forEach(li => li.onclick = () => rsApri(li.dataset.uid));
 }
 
-async function rsApri(uidSquadra) {
+// daSync = ricarica per dati nuovi dal cloud. La lettura e' asincrona: se
+// nel frattempo l'utente ha toccato un atleta, la ricarica si abbandona,
+// altrimenti cancellerebbe il tocco (visto il 02/10 con i test).
+async function rsApri(uidSquadra, daSync = false) {
     const squadra = await leggi('squadre', uidSquadra);
     const campionato = await leggi('campionati', squadra.campionato_uid);
     const societa = await leggi('societa', squadra.societa_uid);
@@ -87,6 +90,8 @@ async function rsApri(uidSquadra) {
         const a = A.get(u);
         elenco.push({ uid: a.uid, cognome: a.cognome, nome: a.nome, sesso: SESSO[a.sesso] || '-', inRosa: true });
     }
+
+    if (daSync && (rsModificata || rs?.uid !== uidSquadra)) return;
 
     const lim = CONFIG.ROSA[societa?.tipo] || CONFIG.ROSA.FITET;
     rs = {

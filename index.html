@@ -84,6 +84,24 @@
         .fzRiga { display: flex; align-items: center; gap: 8px; }
         .fzRiga span { width: 92px; font-weight: 600; flex: none; }
         .fzRiga select, .fzRiga input { flex: 1; }
+        .fzRiga[hidden] { display: none; }   /* display:flex sopra vince sull'attributo hidden */
+        /* avviso a comparsa (app.js: avviso) sopra la barra in basso */
+        #avviso { position: fixed; left: 16px; right: 16px; bottom: calc(72px + env(safe-area-inset-bottom)); z-index: 5;
+                  background: #b00020; color: #fff; padding: 12px 14px; border-radius: 10px; text-align: center;
+                  font-weight: 600; box-shadow: 0 4px 14px rgba(0,0,0,.3); }
+        #avviso.ok { background: var(--verde); }
+        #avviso[hidden] { display: none; }
+
+        /* elenchi raggruppati (app.js: htmlGruppi) */
+        h3.grFed { margin: 16px 0 6px; padding: 4px 8px; background: var(--verde); color: #fff; border-radius: 6px; font-size: 14px; letter-spacing: .5px; }
+        details.gr { border: 1px solid var(--bordo); border-radius: 8px; margin: 6px 0; background: #fff; }
+        details.gr > summary { padding: 12px 10px; cursor: pointer; list-style: none; display: flex; align-items: center; gap: 6px; }
+        details.gr > summary::-webkit-details-marker { display: none; }
+        details.gr > summary::before { content: "▸"; color: var(--grigio); width: 14px; flex: none; }
+        details.gr[open] > summary::before { content: "▾"; }
+        details.gr > summary span { margin-left: auto; background: #eee; border-radius: 10px; padding: 1px 9px; font-size: 13px; color: var(--grigio); }
+        details.gr > ul { margin: 0; padding: 0 10px 4px; }
+
         .avviso { background: #fff3cd; border: 1px solid #e0c060; border-radius: 8px; padding: 8px 10px; margin: 8px 0; font-size: 14px; color: #5a4500; }
     </style>
 </head>
@@ -91,6 +109,7 @@
     <header><span>TennisTavolo<span id="ambiente"></span></span><span id="stato"></span></header>
     <div id="aggiorna" hidden>Nuova versione disponibile — tocca qui per aggiornare</div>
     <main id="vista"><p class="vuoto">Caricamento…</p></main>
+    <div id="avviso" hidden></div>
     <nav id="nav" hidden>
         <button data-v="incontri">Incontri</button>
         <button data-v="rosa">Rosa</button>
@@ -100,14 +119,14 @@
 
 <!-- Il ?v= deve essere UGUALE a VERSIONE in sw.js e va aumentato a ogni
      modifica di un file: e' cosi' che i telefoni scaricano la versione nuova. -->
-    <script src="config.js?v=3.10.0"></script>
-    <script src="store.js?v=3.10.0"></script>
-    <script src="cloud.js?v=3.10.0"></script>
-    <script src="sync.js?v=3.10.0"></script>
-    <script src="app.js?v=3.10.0"></script>
-    <script src="incontri.js?v=3.10.0"></script>
-    <script src="formazione.js?v=3.10.0"></script>
-    <script src="rosa.js?v=3.10.0"></script>
-    <script src="atleti.js?v=3.10.0"></script>
+    <script src="config.js?v=3.11.0"></script>
+    <script src="store.js?v=3.11.0"></script>
+    <script src="cloud.js?v=3.11.0"></script>
+    <script src="sync.js?v=3.11.0"></script>
+    <script src="app.js?v=3.11.0"></script>
+    <script src="incontri.js?v=3.11.0"></script>
+    <script src="formazione.js?v=3.11.0"></script>
+    <script src="rosa.js?v=3.11.0"></script>
+    <script src="atleti.js?v=3.11.0"></script>
 </body>
 </html>

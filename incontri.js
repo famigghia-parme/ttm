@@ -15,7 +15,7 @@ viste.incontri = {
     init: () => { inAperto = null; fz = null; fzModificata = false; inElenco(); },
     // Formazione aperta: con modifiche non salvate non si ridisegna nulla
     // (si perderebbero); senza, si ricarica con i dati nuovi.
-    suDati: () => fz ? (fzModificata ? null : fzApri(fz.uid, fz.sel))
+    suDati: () => fz ? (fzModificata ? null : fzApri(fz.uid, fz.sel, true))
         : inAperto ? inScheda(inAperto) : inElenco()
 };
 
@@ -30,7 +30,9 @@ async function datiIncontri() {
         return {
             i, c, casa, ospite,
             nostro: !!(casa?.nostra_squadra || ospite?.nostra_squadra),
-            terminato: i.stato === 'Terminato'
+            terminato: i.stato === 'Terminato',
+            // per htmlGruppi: federazione > campionato > girone
+            tipo: c?.tipo, campionato: c?.nome, girone: casa?.girone || ospite?.girone || ''
         };
     }).filter(x => x.c && x.c.stagione === stag);
 }
@@ -53,13 +55,19 @@ async function inElenco() {
     const mostrate = inPassate ? fatte : da;
     const scaricati = await metaLeggi('scaricati', []);
 
-    const voce = x => `
+    // conCampionato: nei "Prossimi" (fuori dai gruppi) serve dire di che campionato e'
+    const voce = (x, conCampionato) => `
       <li class="atleta cliccabile${inTutti && x.nostro ? ' nostro' : ''}${x.terminato ? ' giocato' : ''}" data-uid="${x.i.uid}">
         <b>${esc(x.casa?.nome)}</b> – <b>${esc(x.ospite?.nome)}</b>
         ${x.terminato ? `<span>${x.i.punti_casa ?? '-'} - ${x.i.punti_ospite ?? '-'}</span>`
             : scaricati.includes(x.i.uid) ? '<span>📥</span>' : ''}<br>
-        <small>${esc(dataBreve(x.i.data_ora))} · ${esc(x.c.nome)}</small>
+        <small>${esc(dataBreve(x.i.data_ora))}${conCampionato === true ? ' · ' + esc(x.c.nome) + (x.girone ? ' ' + esc(x.girone) : '') : ''}</small>
       </li>`;
+
+    // Tanti incontri: raggruppati per federazione > campionato > girone
+    // (htmlGruppi in app.js). Sopra, nella scheda "Da giocare", i primi tre
+    // in ordine di data: il giorno della gara si trova subito.
+    const prossimi = !inPassate && da.length > 3 ? da.filter(x => x.i.data_ora).slice(0, 3) : [];
 
     c.innerHTML = `
       <label class="flagTutti"><input type="checkbox" id="chkTutti"${inTutti ? ' checked' : ''}>
@@ -68,8 +76,10 @@ async function inElenco() {
         <button id="tabDa"${inPassate ? '' : ' class="att"'}>Da giocare (${da.length})</button>
         <button id="tabFatte"${inPassate ? ' class="att"' : ''}>Giocate (${fatte.length})</button>
       </div>
-      ${mostrate.length ? '<ul>' + mostrate.map(voce).join('') + '</ul>'
+      ${prossimi.length ? '<h4>Prossimi</h4><ul>' + prossimi.map(x => voce(x, true)).join('') + '</ul>' : ''}
+      ${mostrate.length ? htmlGruppi('incontri', mostrate, x => voce(x))
             : `<p class="vuoto">${inPassate ? 'Nessuna gara giocata' : 'Nessun incontro da giocare'}</p>`}`;
+    agganciaGruppi('incontri', c);
 
     $('#chkTutti').onchange = e => { inTutti = e.target.checked; try { localStorage.setItem('ttm.tuttiIncontri', inTutti ? '1' : '0'); } catch { } inElenco(); };
     const scheda = v => { inPassate = v; try { localStorage.setItem('ttm.passateIncontri', v ? '1' : '0'); } catch { } inElenco(); };
