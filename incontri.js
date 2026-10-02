@@ -1,8 +1,8 @@
 // TennisTavoloManager - incontri.js  (PWA cloud)
 // Elenco incontri della stagione e scheda dell'incontro, tutto dai dati
 // locali: funziona anche offline. Dalla scheda si scarica il punto per
-// punto per la gara. Formazione e punteggio dal telefono arrivano con il
-// prossimo passo (logica di gioco portata in JavaScript).
+// punto per la gara e si apre la Formazione (formazione.js, che disegna
+// qui dentro). Il punteggio dal telefono arriva con il prossimo passo.
 
 let inTutti = false, inPassate = false, inAperto = null;
 try {
@@ -12,8 +12,11 @@ try {
 
 viste.incontri = {
     html: '<div id="inCorpo"></div>',
-    init: () => { inAperto = null; inElenco(); },
-    suDati: () => inAperto ? inScheda(inAperto) : inElenco()
+    init: () => { inAperto = null; fz = null; fzModificata = false; inElenco(); },
+    // Formazione aperta: con modifiche non salvate non si ridisegna nulla
+    // (si perderebbero); senza, si ricarica con i dati nuovi.
+    suDati: () => fz ? (fzModificata ? null : fzApri(fz.uid, fz.sel))
+        : inAperto ? inScheda(inAperto) : inElenco()
 };
 
 async function datiIncontri() {
@@ -135,13 +138,16 @@ async function inScheda(uid) {
         <b>${esc(x.ospite?.nome)}</b></div>
       <div class="lvInfo">${esc([dataBreve(i.data_ora), x.c.nome, i.luogo].filter(Boolean).join(' · '))}</div>
       ${x.terminato ? '' : `
-        <button class="pieno" id="inScarica">${scaricato ? '📥 Scaricato — aggiorna' : '📥 Scarica per la gara'}</button>
+        <button class="pieno" id="inFormazione">✏️ Formazione</button>
+        <button class="pieno chiaro" id="inScarica">${scaricato ? '📥 Scaricato — aggiorna' : '📥 Scarica per la gara'}</button>
         <div class="lvInfo">${scaricato ? 'Ultimo scarico: ' + new Date(scaricato).toLocaleString('it-IT') : 'Da fare prima di partire, con la rete: poi funziona anche senza.'}</div>`}
       <div id="msg"></div>
       <h4>Partite</h4>${righePartite.length ? '<ul>' + righePartite.join('') + '</ul>' : '<p class="vuoto">Partite non ancora create</p>'}
       <h4>Formazioni</h4>${squadra(x.casa, true)}${squadra(x.ospite, false)}`;
 
     $('#inIndietro').onclick = inElenco;
+    const bf = $('#inFormazione');
+    if (bf) bf.onclick = () => fzApri(uid);
     const b = $('#inScarica');
     if (b) b.onclick = async () => {
         b.disabled = true; msg('Scarico in corso…', true);

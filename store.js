@@ -57,11 +57,29 @@ const GARA_INCONTRO = ['squadra_lettere_abc_uid', 'colore_maglia_casa', 'colore_
     'tavolo', 'palline', 'giudice_arbitro', 'qualifica_arbitro',
     'defibrillatore', 'operatore_dae', 'provvedimenti_disciplinari'];
 
+// Formule di gioco: cio' che serve al telefono di FormuleGioco.cs del PC.
+// Chiave = nome dell'enum CodiceFormula, come arriva dal cloud in
+// campionati.formula. titolari/riserve = NumTitolari / NumRiserve;
+// doppio: 'libero' = la coppia si sceglie, 'fisso' = la decide la formula
+// (Olimpica), null = nessun doppio.
+// Se sul PC cambia una formula va cambiata anche qui: il confronto si fa
+// con Tools/TestPwaCloud (formule.json generato dal C#).
+const FORMULE = {
+    Courbillon:           { titolari: 2, riserve: 3, doppio: 'libero' },
+    MiniSwaythling:       { titolari: 3, riserve: 2, doppio: null },
+    NewSwaythling:        { titolari: 3, riserve: 2, doppio: null },
+    Olimpica:             { titolari: 3, riserve: 2, doppio: 'fisso' },
+    MiniSwaythlingDoppio: { titolari: 3, riserve: 3, doppio: 'libero' },
+    CSIFormula:           { titolari: 3, riserve: 2, doppio: null },
+    CsiCorbillon:         { titolari: 2, riserve: 2, doppio: 'libero' }
+};
+// Formula sconosciuta: stessa di riserva del PC (Mini Swaythling con doppio).
+const formulaDi = nome => FORMULE[nome] || FORMULE.MiniSwaythlingDoppio;
+
 // Minimo di atleti in rosa per poter giocare = titolari della formula del
 // campionato. Come FormuleGioco.MinimoRosa sul PC: Courbillon 2, le altre 3.
-// formula arriva dal cloud come nome dell'enum (CodiceFormula).
 function minimoRosa(formula) {
-    return formula === 'Courbillon' || formula === 'CsiCorbillon' ? 2 : 3;
+    return formulaDi(formula).titolari;
 }
 
 // Reale resta 'ttm' (il nome di sempre): chi aveva gia' scaricato non riparte da zero.
