@@ -20,6 +20,8 @@
 //  - time-out   -> partita: timeout_casa_il / timeout_ospite_il = ora (UTC)
 //                  della chiamata (ImpostaTimeoutAsync). Uno per lato in
 //                  ogni partita; parte il conto alla rovescia di un minuto.
+//                  Se si riprende a giocare prima, l'ora va indietro
+//                  (lvChiudiTimeout): conto fermato, time-out usato.
 // In piu', senza scrivere nulla: ogni 6 punti la colonna al centro del
 // tabellone segnala la pausa per l'asciugamano (asciugamano in comune.js).
 //
@@ -339,6 +341,7 @@ async function lvDisegna(forza) {
     c.querySelectorAll('button[data-doppio]').forEach(b => b.onclick = () => lvDichiaraDoppio(b.dataset.doppio));
     c.querySelectorAll('button.lvTo[data-to]').forEach(b => b.onclick = () => lvTimeout(b.dataset.to === '1'));
     su('#lvToAnnulla', () => lvTimeoutAnnulla($('#lvToAnnulla').dataset.to === '1'));
+    su('#lvToFine', () => lvTimeoutFine($('#lvToFine').dataset.to === '1'));
     // Conto alla rovescia: allo scadere la fascia sparisce, con un avviso
     if (toAttivo) {
         const il = toAttivo.il;
@@ -476,6 +479,35 @@ const lvTimeout = casa => lvAzione(async (s, g) => {
     await lvDisegna(true);
 });
 
+// Il minuto e' il massimo: se si riprende a giocare prima, il conto va
+// fermato ma il time-out resta usato. Non c'e' una colonna in piu': l'ora
+// della chiamata si sposta indietro di un'ora, cosi' resta scritta (= usato)
+// ma il minuto risulta finito su ogni dispositivo, anche con l'orologio un
+// po' diverso (come DatabaseService.ChiudiTimeoutAsync sul PC).
+// p = copia della partita, modificata qui; casa non indicato = tutti e due
+// i lati. Ritorna true se c'era un time-out in corso.
+function lvChiudiTimeout(p, casa) {
+    const adesso = Date.now();
+    let chiuso = false;
+    for (const c of [true, false]) {
+        if (casa !== undefined && casa !== c) continue;
+        const col = c ? 'timeout_casa_il' : 'timeout_ospite_il';
+        if (!p[col]) continue;
+        const inizio = Math.min(Date.parse(p[col]), adesso);
+        if (inizio + SECONDI_TIMEOUT * 1000 <= adesso) continue;       // gia' finito
+        p[col] = new Date(inizio - 3600 * 1000).toISOString();
+        chiuso = true;
+    }
+    return chiuso;
+}
+
+// "Riprende il gioco" nella fascia del time-out.
+const lvTimeoutFine = casa => lvAzione(async (s, g) => {
+    const p = { ...g.p };
+    if (lvChiudiTimeout(p, casa)) await scriviLocale([{ t: 'partite', riga: p }]);
+    await lvDisegna(true);
+});
+
 // Chiamato per errore: il time-out torna disponibile.
 const lvTimeoutAnnulla = casa => lvAzione(async (s, g) => {
     const col = casa ? 'timeout_casa_il' : 'timeout_ospite_il';
@@ -486,10 +518,13 @@ const lvTimeoutAnnulla = casa => lvAzione(async (s, g) => {
 
 const lvPunto = casa => lvAzione(async (s, g) => {
     if (!g.sorteggio) return;
-    // Si segna un punto durante il time-out: si e' ripreso a giocare, la fascia va via
+    // Si segna un punto durante il time-out: si e' ripreso a giocare. La
+    // fascia va via qui e il conto si ferma anche sugli altri dispositivi
+    // (lvChiudiTimeout: la partita si scrive insieme al punto).
     const inCorso = lvTimeoutAttivo(g.p);
     if (inCorso) lvToVisti.add(inCorso.il);
     const p = { ...g.p };
+    const toChiuso = lvChiudiTimeout(p);
     const pc = g.pc + (casa ? 1 : 0), po = g.po + (casa ? 0 : 1);
     const fineSet = Gioco.isSetTerminato(pc, po);
     const svc = p.set_vinti_casa + (fineSet && casa ? 1 : 0), svo = p.set_vinti_ospite + (fineSet && !casa ? 1 : 0);
@@ -525,7 +560,7 @@ const lvPunto = casa => lvAzione(async (s, g) => {
     if (s.inc.stato === 'Programmato') incontro().stato = 'InCorso';
 
     let ris = null;
-    const partitaCambia = fineSet || !p.in_corso;
+    const partitaCambia = fineSet || !p.in_corso || toChiuso;
     if (fineSet) { p.set_vinti_casa = svc; p.set_vinti_ospite = svo; }
     if (finePartita) {
         p.completata = true; p.in_corso = false; p.vinta_da_casa = svc > svo;

@@ -202,11 +202,15 @@ const htmlAsciugamano = (pc, po) => asciugamano(pc, po)
     ? '<div class="lvAsciuga on"><span>ASCIUGAMANO</span></div>'
     : '<div class="lvAsciuga"></div>';
 
-// Time-out: un minuto, uno solo per giocatore (o coppia) in ogni partita.
+// Time-out: un minuto AL MASSIMO, uno solo per giocatore (o coppia) in ogni
+// partita. Chi l'ha chiamato puo' riprendere prima: il conto si ferma, il
+// time-out resta usato.
 const SECONDI_TIMEOUT = 60;
 
 // Riga sotto il tabellone: un pulsante per lato, sotto la colonna del suo
 // giocatore. sinistra / destra = { casa, usato } nell'ordine dello schermo.
+// Disponibile e' giallo, usato diventa spento e cambia scritta (non conta
+// solo il colore): vedi button.lvTo in stile.css.
 function htmlPulsantiTimeout(sinistra, destra) {
     const b = l => l.usato
         ? '<button class="pieno chiaro lvTo" disabled>Time-out usato ✔</button>'
@@ -217,9 +221,12 @@ function htmlPulsantiTimeout(sinistra, destra) {
 // Fascia del time-out in corso, sopra il tabellone. I secondi li scrive
 // avviaContoTimeout: qui non ci sono, cosi' la pagina non si ridisegna a
 // ogni secondo.
+// "Riprende il gioco" = si ricomincia prima del minuto: conto fermato,
+// time-out usato. "Chiamato per errore" = torna disponibile.
 function htmlTimeoutInCorso(nome, casa) {
     return `<div class="lvTimeout"><b>⏱ TIME-OUT</b>${esc(nome)}
         <span id="lvTimeoutSec"></span>
+        <button class="pieno" id="lvToFine" data-to="${casa ? 1 : 0}">▶ Riprende il gioco</button>
         <button class="pieno chiaro" id="lvToAnnulla" data-to="${casa ? 1 : 0}">Chiamato per errore: annulla</button></div>`;
 }
 

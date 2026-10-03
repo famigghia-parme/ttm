@@ -5,7 +5,7 @@
 // mostra "Nuova versione disponibile".
 // Le chiamate a Supabase non passano da qui (altro dominio).
 
-const VERSIONE = '3.14.1';
+const VERSIONE = '3.14.2';
 const CACHE = 'ttm-' + VERSIONE;
 
 // Tutti i file caricati con ?v= da index.html (script e foglio di stile)
