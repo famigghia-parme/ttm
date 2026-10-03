@@ -15,6 +15,22 @@ const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g,
     c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
+// ---------------- nomi delle squadre ----------------
+// Nome di squadra dove lo spazio e' poco (testata della scheda incontro e
+// dei Punti: "Casa  2 – 1  Ospite"). Le squadre della stessa societa' si
+// distinguono dall'ULTIMA parola ("Olimpia A", "Olimpia B"): se il nome non
+// ci sta si accorcia la parte prima e l'ultima parola resta intera
+// ("Unione Sportiva Oli… A"), invece dei puntini in fondo che la
+// taglierebbero. Il taglio lo fa il CSS (.nmInizio / .nmFine in stile.css).
+// Un nome di una parola sola si accorcia in fondo, come prima.
+function htmlNomeSquadra(nome) {
+    const n = String(nome ?? '').trim();
+    const taglio = n.lastIndexOf(' ');
+    return taglio < 0
+        ? `<b class="nmSq"><span class="nmInizio">${esc(n)}</span></b>`
+        : `<b class="nmSq"><span class="nmInizio">${esc(n.slice(0, taglio))}</span><span class="nmFine"> ${esc(n.slice(taglio + 1))}</span></b>`;
+}
+
 // ---------------- avvisi ----------------
 
 // Avviso a comparsa sopra la barra in basso: si vede sempre, anche quando

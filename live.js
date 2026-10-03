@@ -280,9 +280,9 @@ async function lvDisegna(forza) {
     // Dalla sezione Punti si torna all'elenco, dalla scheda all'incontro
     let toAttivo = null;       // time-out in corso sulla partita mostrata
     let h = `<button class="pieno chiaro" id="lvIndietro">${inModo === 'punti' ? '← Punti' : '← Incontro'}</button>
-      <div class="lvTesta"><b>${esc(s.casa?.nome)}</b>
+      <div class="lvTesta">${htmlNomeSquadra(s.casa?.nome)}
         <span class="lvTot">${s.vinteCasa} – ${s.vinteOspite}<small class="lvEtic">partite</small></span>
-        <b>${esc(s.ospite?.nome)}</b></div>`;
+        ${htmlNomeSquadra(s.ospite?.nome)}</div>`;
 
     if (s.inc.stato === 'Terminato') h += '<p class="vuoto">Incontro terminato</p>';
     else if (!s.partite.length) h += '<p class="vuoto">Partite non ancora create: serve la formula del campionato (si imposta dal PC).</p>';

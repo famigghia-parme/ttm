@@ -74,8 +74,16 @@ li.nostro { border-left: 4px solid var(--verde); padding-left: 8px; }
 li.giocato { opacity: .8; }
 
 .lvTesta { display: flex; align-items: center; gap: 8px; margin: 8px 0; font-size: 14px; }
-.lvTesta b { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.lvTesta b:last-child { text-align: right; }
+/* Nomi delle due squadre ai lati del risultato. Se non ci stanno si
+   accorcia l'inizio e resta intera l'ultima parola, che distingue le
+   squadre della stessa societa' ("Olimpia A" / "Olimpia B"): vedi
+   htmlNomeSquadra in comune.js. */
+.lvTesta b { flex: 1; min-width: 0; display: flex; white-space: nowrap; }
+.lvTesta b:last-child { justify-content: flex-end; }
+.nmInizio { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* flex: none = l'ultima parola non si stringe mai (a stringersi e' l'inizio);
+   il tetto serve solo se l'ultima parola e' lunghissima */
+.nmFine { flex: none; max-width: 75%; overflow: hidden; text-overflow: ellipsis; white-space: pre; }
 .lvTot { font-size: 22px; font-weight: 700; flex: none; }
 .lvTot small.lvEtic { display: block; font-size: 10px; font-weight: 400; color: var(--grigio); text-align: center; }
 .lvInfo { color: var(--grigio); font-size: 13px; text-align: center; margin: 4px 0; }

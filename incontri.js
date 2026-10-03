@@ -169,9 +169,9 @@ async function inScheda(uid) {
     const scaricato = await metaLeggi('scaricato.' + uid);
     c.innerHTML = `
       <button class="pieno chiaro" id="inIndietro">${inModo === 'punti' ? '← Punti' : '← Incontri'}</button>
-      <div class="lvTesta"><b>${esc(x.casa?.nome)}</b>
+      <div class="lvTesta">${htmlNomeSquadra(x.casa?.nome)}
         <span class="lvTot">${pc ?? '-'} – ${po ?? '-'}<small class="lvEtic">partite</small></span>
-        <b>${esc(x.ospite?.nome)}</b></div>
+        ${htmlNomeSquadra(x.ospite?.nome)}</div>
       <div class="lvInfo">${esc([dataBreve(i.data_ora), x.c.nome, i.luogo].filter(Boolean).join(' · '))}</div>
       ${x.terminato ? '' : `
         <button class="pieno" id="inPunti">🏓 Segna i punti</button>
