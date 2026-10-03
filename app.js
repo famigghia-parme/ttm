@@ -72,6 +72,15 @@ async function stagioneCorrente() {
 
 const perUid = righe => new Map(righe.map(r => [r.uid, r]));
 
+// Federazione di una SOCIETA'. Attenzione: societa.tipo arriva dal PC come
+// NUMERO ("0" = FITET, "1" = CSI: l'enum TipoCampionato, che in Societa e'
+// salvato cosi'), mentre campionati.tipo e' gia' la parola ("FITET"/"CSI").
+// Qui si accettano tutte e due le forme e si restituisce sempre la parola.
+// Trovato il 03/10: la tendina degli Atleti mostrava "0" e "1", e i punti
+// FITET non comparivano mai (il confronto con 'FITET' falliva sempre).
+const FEDERAZIONI = ['FITET', 'CSI'];
+const federazione = t => FEDERAZIONI[t] ?? (t == null ? '' : String(t));
+
 // Categoria e punti FITET di ogni atleta nella stagione: stanno sul
 // tesseramento con una societa' FITET; se ce n'e' piu' d'uno vale quello con
 // piu' punti. Chi non e' tesserato FITET non compare. Ritorna
@@ -79,7 +88,7 @@ const perUid = righe => new Map(righe.map(r => [r.uid, r]));
 function classificaFitet(affiliazioni, S, stagione) {
     const classifica = new Map();
     for (const af of affiliazioni) {
-        if (af.stagione !== stagione || S.get(af.societa_uid)?.tipo !== 'FITET') continue;
+        if (af.stagione !== stagione || federazione(S.get(af.societa_uid)?.tipo) !== 'FITET') continue;
         if (af.categoria_fitet == null && af.punti_fitet == null) continue;
         const prima = classifica.get(af.atleta_uid);
         if (!prima || (af.punti_fitet ?? 0) > (prima.punti_fitet ?? 0)) classifica.set(af.atleta_uid, af);

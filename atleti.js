@@ -48,17 +48,19 @@ async function atInit() {
     // Le societa' delle nostre squadre nella stagione: in cima alla tendina
     const nostre = new Set(squadre.filter(s => s.nostra_squadra && C.get(s.campionato_uid)?.stagione === stag).map(s => s.societa_uid));
     const perNome = (a, b) => a.nome.localeCompare(b.nome, 'it');
-    const opz = (s, conTipo) => `<option value="${s.uid}">${esc(s.nome)}${conTipo ? ` (${esc(s.tipo)})` : ''}</option>`;
+    // federazione(): societa.tipo arriva come "0"/"1", vedi app.js
+    const fed = s => federazione(s.tipo) || 'Altro';
+    const opz = (s, conTipo) => `<option value="${s.uid}">${esc(s.nome)}${conTipo ? ` (${esc(fed(s))})` : ''}</option>`;
     const gruppo = (titolo, lista, conTipo) => lista.length
         ? `<optgroup label="${esc(titolo)}">${lista.sort(perNome).map(s => opz(s, conTipo)).join('')}</optgroup>` : '';
     const altre = societa.filter(s => !nostre.has(s.uid));
-    const federazioni = [...new Set(altre.map(s => s.tipo || 'Altro'))]
+    const federazioni = [...new Set(altre.map(fed))]
         .sort((a, b) => (ORDINE_FEDERAZIONI[a] ?? 9) - (ORDINE_FEDERAZIONI[b] ?? 9) || a.localeCompare(b, 'it'));
 
     const sel = $('#selSoc');
     sel.innerHTML = '<option value="">Tutte le società</option>' +
         gruppo('Le nostre', societa.filter(s => nostre.has(s.uid)), true) +
-        federazioni.map(f => gruppo(f, altre.filter(s => (s.tipo || 'Altro') === f), false)).join('');
+        federazioni.map(f => gruppo(f, altre.filter(s => fed(s) === f), false)).join('');
     if (!societa.some(s => s.uid === atSoc)) atSoc = '';
     sel.value = atSoc;
     sel.onchange = () => { atSoc = sel.value; try { localStorage.setItem('ttm.societa', atSoc); } catch { } atDisegna(); };
@@ -121,7 +123,7 @@ function atDisegna() {
     lista.innerHTML = l.slice(0, AT_MAX).map(r => {
         // Seconda riga: la societa' (solo cercando fra tutte), poi categoria e punti FITET
         const sotto = [];
-        if (!atSoc) sotto.push(r.s ? `${r.s.nome} (${r.s.tipo})` : 'non tesserato in questa stagione');
+        if (!atSoc) sotto.push(r.s ? `${r.s.nome} (${federazione(r.s.tipo)})` : 'non tesserato in questa stagione');
         if (r.categoria != null) sotto.push('cat ' + r.categoria);
         if (r.punti != null) sotto.push(r.punti + ' pti');
         return `<li class="atleta" data-uid="${r.a.uid}"><b>${esc(r.a.cognome)}</b> ${esc(r.a.nome)}

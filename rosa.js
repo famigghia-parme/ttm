@@ -38,9 +38,10 @@ async function rsElenco() {
         s, tipo: cp.tipo, campionato: cp.nome, girone: s.girone || '',
         n: rose.filter(r => r.squadra_uid === s.uid && r.stagione === cp.stagione).length
     }));
-    // La nostra squadra si riconosce dal COLORE del nome (prima c'era la
-    // scritta "nostra" in coda: con i nomi lunghi spostava il numero). Il
-    // numero in rosa sta in una colonna a destra, con il titolo in cima.
+    // La nostra squadra ha una stella davanti al nome, sfondo chiaro e barra
+    // a sinistra (classe "nostra", vedi index.html). Prima c'era la scritta
+    // "nostra" in coda: con i nomi lunghi spostava il numero. Il numero in
+    // rosa sta in una colonna a destra, con il titolo in cima.
     c.innerHTML = htmlGruppi('rosa', voci, v => `<li class="atleta cliccabile rsSq${v.s.nostra_squadra ? ' nostra' : ''}" data-uid="${v.s.uid}">
           <b>${esc(v.s.nome)}</b><div class="rsNum">${v.n}</div></li>`,
         '<li class="rsTesta"><div>Squadra</div><div class="rsNum">In rosa</div></li>');
@@ -90,7 +91,7 @@ async function rsApri(uidSquadra, daSync = false) {
 
     if (daSync && (rsModificata || rs?.uid !== uidSquadra)) return;
 
-    const lim = CONFIG.ROSA[societa?.tipo] || CONFIG.ROSA.FITET;
+    const lim = CONFIG.ROSA[federazione(societa?.tipo)] || CONFIG.ROSA.FITET;
     rs = {
         uid: uidSquadra, squadra: squadra.nome, campionato: campionato.nome, stagione: stag,
         min: minimoRosa(campionato.formula), max: lim.max, atleti: elenco,

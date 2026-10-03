@@ -108,10 +108,13 @@
         .rsNostra { color: var(--verde); font-weight: 700; }
         /* Elenco squadre della Rosa: nome a sinistra (va a capo se lungo), numero
            in rosa in una colonna a destra, sempre allineata. La nostra squadra
-           si riconosce dal colore del nome. */
+           NON si distingue dal colore del testo (verde scuro e nero si
+           confondono): ha una stella davanti al nome, lo sfondo chiaro e una
+           barra a sinistra. Il nome resta nero, come gli altri. */
         .rsSq { display: flex; align-items: center; gap: 10px; }
         .rsSq b { flex: 1; min-width: 0; }
-        .rsSq.nostra b { color: var(--verde); }
+        .rsSq.nostra { background: #e8f5e9; border-left: 6px solid var(--verde); padding-left: 8px; }
+        .rsSq.nostra b::before { content: "\2605\00a0"; color: #e65100; }
         .rsNum { flex: none; width: 56px; text-align: right; color: var(--grigio); font-size: 14px; }
         li.rsTesta { display: flex; gap: 10px; padding: 6px 4px 2px; font-size: 12px; color: var(--grigio); }
         li.rsTesta div:first-child { flex: 1; }
@@ -156,16 +159,16 @@
 
 <!-- Il ?v= deve essere UGUALE a VERSIONE in sw.js e va aumentato a ogni
      modifica di un file: e' cosi' che i telefoni scaricano la versione nuova. -->
-    <script src="config.js?v=3.13.1"></script>
-    <script src="store.js?v=3.13.1"></script>
-    <script src="cloud.js?v=3.13.1"></script>
-    <script src="sync.js?v=3.13.1"></script>
-    <script src="app.js?v=3.13.1"></script>
-    <script src="incontri.js?v=3.13.1"></script>
-    <script src="formazione.js?v=3.13.1"></script>
-    <script src="gioco.js?v=3.13.1"></script>
-    <script src="live.js?v=3.13.1"></script>
-    <script src="rosa.js?v=3.13.1"></script>
-    <script src="atleti.js?v=3.13.1"></script>
+    <script src="config.js?v=3.13.3"></script>
+    <script src="store.js?v=3.13.3"></script>
+    <script src="cloud.js?v=3.13.3"></script>
+    <script src="sync.js?v=3.13.3"></script>
+    <script src="app.js?v=3.13.3"></script>
+    <script src="incontri.js?v=3.13.3"></script>
+    <script src="formazione.js?v=3.13.3"></script>
+    <script src="gioco.js?v=3.13.3"></script>
+    <script src="live.js?v=3.13.3"></script>
+    <script src="rosa.js?v=3.13.3"></script>
+    <script src="atleti.js?v=3.13.3"></script>
 </body>
 </html>
