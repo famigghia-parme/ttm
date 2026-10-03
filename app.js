@@ -71,6 +71,21 @@ async function stagioneCorrente() {
 }
 
 const perUid = righe => new Map(righe.map(r => [r.uid, r]));
+
+// Categoria e punti FITET di ogni atleta nella stagione: stanno sul
+// tesseramento con una societa' FITET; se ce n'e' piu' d'uno vale quello con
+// piu' punti. Chi non e' tesserato FITET non compare. Ritorna
+// Map(uid atleta -> riga di atleti_societa). Usata da Rosa e Atleti.
+function classificaFitet(affiliazioni, S, stagione) {
+    const classifica = new Map();
+    for (const af of affiliazioni) {
+        if (af.stagione !== stagione || S.get(af.societa_uid)?.tipo !== 'FITET') continue;
+        if (af.categoria_fitet == null && af.punti_fitet == null) continue;
+        const prima = classifica.get(af.atleta_uid);
+        if (!prima || (af.punti_fitet ?? 0) > (prima.punti_fitet ?? 0)) classifica.set(af.atleta_uid, af);
+    }
+    return classifica;
+}
 const nomeAtleta = a => a ? `${a.cognome} ${a.nome}` : '';
 
 // Stessa etichetta di Partita.EtichettaOrdine sul PC

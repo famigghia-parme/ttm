@@ -59,14 +59,8 @@ async function rsApri(uidSquadra, daSync = false) {
         perIndice('atleti_squadre', 'squadra_uid', uidSquadra)]);
     const A = perUid(atleti), S = perUid(tutteSoc);
 
-    // Categoria/punti FITET della stagione: se piu' affiliazioni, quella con piu' punti
-    const classifica = new Map();
-    for (const af of affiliazioni) {
-        if (af.stagione !== stag || S.get(af.societa_uid)?.tipo !== 'FITET') continue;
-        if (af.categoria_fitet == null && af.punti_fitet == null) continue;
-        const prima = classifica.get(af.atleta_uid);
-        if (!prima || (af.punti_fitet ?? 0) > (prima.punti_fitet ?? 0)) classifica.set(af.atleta_uid, af);
-    }
+    // Categoria/punti FITET della stagione (classificaFitet in app.js)
+    const classifica = classificaFitet(affiliazioni, S, stag);
 
     const inRosa = new Set(rosaRighe.filter(r => r.stagione === stag).map(r => r.atleta_uid));
     const visti = new Set();

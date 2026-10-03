@@ -5,7 +5,7 @@
 // mostra "Nuova versione disponibile".
 // Le chiamate a Supabase non passano da qui (altro dominio).
 
-const VERSIONE = '3.12.0';
+const VERSIONE = '3.13.0';
 const CACHE = 'ttm-' + VERSIONE;
 
 const SCRIPT = ['config.js', 'store.js', 'cloud.js', 'sync.js', 'app.js', 'incontri.js', 'formazione.js', 'gioco.js', 'live.js', 'rosa.js', 'atleti.js'];
