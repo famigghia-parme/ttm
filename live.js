@@ -16,7 +16,12 @@
 //                  a fine set / partita / incontro: partita, risultato e
 //                  punti classifica dell'incontro, ora di inizio e di fine
 //                  (AggiungiPuntoAsync, AggiornaRisultatoIncontroAsync);
-//  - annulla    -> toglie l'ultimo punto (AnnullaUltimoPuntoAsync).
+//  - annulla    -> toglie l'ultimo punto (AnnullaUltimoPuntoAsync);
+//  - time-out   -> partita: timeout_casa_il / timeout_ospite_il = ora (UTC)
+//                  della chiamata (ImpostaTimeoutAsync). Uno per lato in
+//                  ogni partita; parte il conto alla rovescia di un minuto.
+// In piu', senza scrivere nulla: ogni 6 punti la colonna al centro del
+// tabellone segnala la pausa per l'asciugamano (asciugamano in comune.js).
 //
 // Differenze volute rispetto al PC:
 //  - aprire i Punti NON segna nulla: l'incontro passa "in corso" al
@@ -40,6 +45,9 @@ let lvBusy = false;     // un tocco alla volta
 let lvHtml = '';        // ultimo disegno: si ridisegna solo se cambia
 let lvVista = '';       // fotografia del punteggio mostrato (partita|set|casa|ospite)
 let lvSveglia = null;   // blocco dello schermo acceso
+// Time-out gia' "consumati" su questo telefono (finiti, o si e' ripreso a
+// giocare prima): i valori di timeout_*_il di cui non mostrare piu' la fascia.
+const lvToVisti = new Set();
 
 // Con i Punti aperti i tocchi sono tanti: un giro di sync ogni tot al
 // massimo (app.js: syncDopoModifica). Il punto e' comunque gia' salvato
@@ -87,6 +95,7 @@ async function lvApri(uid) {
 
 // Lascia i Punti senza ridisegnare (cambio di vista, formazione).
 function lvLascia() {
+    fermaContoTimeout();
     if (!lv) return;
     lv = null; lvHtml = '';
     Sync.pausaMs = 0;
@@ -267,6 +276,7 @@ async function lvDisegna(forza) {
     lvVista = g ? g.chiave : '';
 
     // Dalla sezione Punti si torna all'elenco, dalla scheda all'incontro
+    let toAttivo = null;       // time-out in corso sulla partita mostrata
     let h = `<button class="pieno chiaro" id="lvIndietro">${inModo === 'punti' ? '← Punti' : '← Incontro'}</button>
       <div class="lvTesta"><b>${esc(s.casa?.nome)}</b>
         <span class="lvTot">${s.vinteCasa} – ${s.vinteOspite}<small class="lvEtic">partite</small></span>
@@ -291,8 +301,14 @@ async function lvDisegna(forza) {
             const serve = g.ruoli ? lvChi(s, p, g.ruoli.serveCasa, g.ruoli.serventeAtleta1) : lvChi(s, p, g.serveCasa, true);
             const riceve = g.ruoli ? lvChi(s, p, !g.ruoli.serveCasa, g.ruoli.riceventeAtleta1) : lvChi(s, p, !g.serveCasa, true);
             const chiusi = g.sets.filter(x => x.completato);
-            // La colonna sinistra e' di chi sta ORA a sinistra del tavolo (vista arbitro)
-            h += `<div class="lvCampo">${g.casaASinistra ? lato(true) + lato(false) : lato(false) + lato(true)}</div>
+            // La colonna sinistra e' di chi sta ORA a sinistra del tavolo (vista
+            // arbitro). Al centro la colonna dell'asciugamano; sotto, un
+            // pulsante time-out per lato; sopra, la fascia del time-out in corso.
+            const sx = g.casaASinistra, usato = casa => !!(casa ? p.timeout_casa_il : p.timeout_ospite_il);
+            toAttivo = lvTimeoutAttivo(p);
+            h += `${toAttivo ? htmlTimeoutInCorso(lvLato(s, p, toAttivo.casa), toAttivo.casa) : ''}
+              <div class="lvCampo">${lato(sx)}${htmlAsciugamano(g.pc, g.po)}${lato(!sx)}</div>
+              ${htmlPulsantiTimeout({ casa: sx, usato: usato(sx) }, { casa: !sx, usato: usato(!sx) })}
               <div class="lvServe">Serve: <b>${esc(serve)}</b> → riceve: ${esc(riceve)}</div>
               ${chiusi.length ? `<div class="lvInfo">Set: ${chiusi.map(x => x.punti_casa + '-' + x.punti_ospite).join(' · ')}</div>` : ''}
               <button class="pieno chiaro" id="lvAnnulla">↶ Annulla ultimo punto</button>
@@ -321,6 +337,34 @@ async function lvDisegna(forza) {
     su('#lvRifai', lvRifaiSorteggio);
     su('#lvCambia', () => { lv.partita = null; lvRicorda(lv.uid, null); lvDisegna(true); });
     c.querySelectorAll('button[data-doppio]').forEach(b => b.onclick = () => lvDichiaraDoppio(b.dataset.doppio));
+    c.querySelectorAll('button.lvTo[data-to]').forEach(b => b.onclick = () => lvTimeout(b.dataset.to === '1'));
+    su('#lvToAnnulla', () => lvTimeoutAnnulla($('#lvToAnnulla').dataset.to === '1'));
+    // Conto alla rovescia: allo scadere la fascia sparisce, con un avviso
+    if (toAttivo) {
+        const il = toAttivo.il;
+        avviaContoTimeout(toAttivo.fine, () => {
+            lvToVisti.add(il);
+            navigator.vibrate?.([200, 100, 200]);
+            avviso('Time-out finito: si riprende a giocare', true);
+            lvDisegna(true);
+        });
+    } else fermaContoTimeout();
+}
+
+// Il time-out in corso sulla partita, se c'e': { casa, il, fine }. In corso
+// = chiamato da meno di un minuto e non ancora "visto" su questo telefono.
+// fine e' in millisecondi sull'orologio di QUESTO telefono; se chi l'ha
+// chiamato ha l'orologio avanti, l'inizio "nel futuro" vale come adesso.
+function lvTimeoutAttivo(p) {
+    const adesso = Date.now();
+    let attivo = null;
+    for (const casa of [true, false]) {
+        const il = casa ? p.timeout_casa_il : p.timeout_ospite_il;
+        if (!il || lvToVisti.has(il)) continue;
+        const fine = Math.min(Date.parse(il), adesso) + SECONDI_TIMEOUT * 1000;
+        if (fine > adesso && (!attivo || fine > attivo.fine)) attivo = { casa, il, fine };
+    }
+    return attivo;
 }
 
 // Selettore: quale partita segna QUESTO telefono (con due tavoli ce ne sono
@@ -421,8 +465,30 @@ const lvRifaiSorteggio = () => lvAzione(async (s, g) => {
     await lvDisegna(true);
 });
 
+// Time-out chiesto da un lato: si scrive l'ora (UTC) sulla partita e parte
+// il minuto. Uno solo per lato in ogni partita.
+const lvTimeout = casa => lvAzione(async (s, g) => {
+    if (!g.sorteggio) return;
+    const col = casa ? 'timeout_casa_il' : 'timeout_ospite_il';
+    if (g.p[col]) { await lvDisegna(true); msg('Time-out già usato in questa partita.'); return; }
+    if (!confirm(`Time-out per ${lvLato(s, g.p, casa)}?\nUn minuto di sospensione: ce n'è uno solo per partita.`)) return;
+    await scriviLocale([{ t: 'partite', riga: { ...g.p, [col]: new Date().toISOString() } }]);
+    await lvDisegna(true);
+});
+
+// Chiamato per errore: il time-out torna disponibile.
+const lvTimeoutAnnulla = casa => lvAzione(async (s, g) => {
+    const col = casa ? 'timeout_casa_il' : 'timeout_ospite_il';
+    if (!g.p[col] || !confirm(`Annullare il time-out di ${lvLato(s, g.p, casa)}?\nTorna disponibile.`)) return;
+    await scriviLocale([{ t: 'partite', riga: { ...g.p, [col]: null } }]);
+    await lvDisegna(true);
+});
+
 const lvPunto = casa => lvAzione(async (s, g) => {
     if (!g.sorteggio) return;
+    // Si segna un punto durante il time-out: si e' ripreso a giocare, la fascia va via
+    const inCorso = lvTimeoutAttivo(g.p);
+    if (inCorso) lvToVisti.add(inCorso.il);
     const p = { ...g.p };
     const pc = g.pc + (casa ? 1 : 0), po = g.po + (casa ? 0 : 1);
     const fineSet = Gioco.isSetTerminato(pc, po);

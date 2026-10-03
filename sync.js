@@ -2,7 +2,8 @@
 // Stesse regole del SyncService del PC:
 //  - PUSH: le righe in outbox vanno al cloud. Upsert su uid; il trigger del
 //    cloud scarta le versioni piu' vecchie. Gli incontri si aggiornano con
-//    PATCH dei soli campi di gara (il telefono non puo' creare incontri);
+//    PATCH dei soli campi di gara cambiati qui (il telefono non puo' creare
+//    incontri): vedi inviaIncontro;
 //  - PULL: righe con sincronizzato_il (orologio del SERVER) > ultimo pull
 //    meno un minuto di margine. Una riga modificata qui e non ancora inviata
 //    vince se e' piu' recente di quella del cloud;
@@ -115,9 +116,7 @@ async function push(avvisi) {
             for (const v of mie) {
                 const riga = await leggi(t, v.uid);
                 if (!riga) { await togliDaOutbox(v); continue; }
-                const corpo = { gara_modificato_il: riga.gara_modificato_il };
-                for (const c of GARA_INCONTRO) corpo[c] = riga[c] ?? null;
-                const r = await Cloud.rest('PATCH', `incontri?uid=eq.${v.uid}`, corpo, 'return=minimal');
+                const r = await inviaIncontro(v, riga);
                 if (r.ok) await togliDaOutbox(v);
                 else avvisi.push(`Incontro non inviato: ${descriviErrore(r)}`);
             }
@@ -152,6 +151,28 @@ async function push(avvisi) {
             }
         }
     }
+}
+
+// Incontro: PATCH dei soli campi di gara cambiati qui (v.colonne; una voce
+// senza elenco, scritta da una versione precedente, li manda tutti).
+// Il cloud accetta i campi di gara solo se il loro orologio
+// (gara_modificato_il) e' piu' avanti di quello salvato: tt_incontri_guard.
+// Se nel frattempo un altro dispositivo ha scritto ALTRI campi dello stesso
+// incontro (uno segna i punti, l'altro compila il referto) il nostro
+// orologio e' rimasto indietro e la modifica verrebbe scartata in
+// silenzio: lo si vede dalla riga che torna, e si rimanda con l'orologio
+// messo subito dopo quello del cloud. Vale chi arriva per ultimo, ma solo
+// sui campi che ha toccato.
+async function inviaIncontro(v, riga) {
+    const corpo = {};
+    for (const c of v.colonne || GARA_INCONTRO) corpo[c] = riga[c] ?? null;
+    const manda = quando => Cloud.rest('PATCH', `incontri?uid=eq.${v.uid}&select=gara_modificato_il`,
+        { ...corpo, gara_modificato_il: quando }, 'return=representation');
+    let r = await manda(riga.gara_modificato_il);
+    const nelCloud = r.ok && r.json?.[0]?.gara_modificato_il;
+    if (nelCloud && Date.parse(nelCloud) !== Date.parse(riga.gara_modificato_il))
+        r = await manda(new Date(Math.max(Date.now(), Date.parse(nelCloud) + 1)).toISOString());
+    return r;
 }
 
 const upsert = (t, righe) => Cloud.rest('POST', `${t}?on_conflict=uid`, righe,
@@ -328,10 +349,15 @@ async function unisci(t, righe) {
         if (!loc || !pend) { st.put(cl); if (cambiata(loc, cl)) n++; continue; }
 
         if (t === 'incontri') {
-            // Il calendario viene sempre dal cloud; la gara solo se piu' recente
-            if (Date.parse(loc.gara_modificato_il) > Date.parse(cl.gara_modificato_il)) {
+            // Il calendario viene sempre dal cloud. Dei campi di gara restano
+            // nostri quelli cambiati qui e non ancora inviati (pend.colonne):
+            // partiranno al prossimo push (inviaIncontro). Tutti gli altri
+            // sono quelli del cloud.
+            // Voce senza elenco (versione precedente): come prima, tutti i
+            // campi di gara e solo se i nostri sono piu' recenti.
+            if (pend.colonne || Date.parse(loc.gara_modificato_il) > Date.parse(cl.gara_modificato_il)) {
                 const r = { ...cl };
-                for (const c of GARA_INCONTRO) r[c] = loc[c];
+                for (const c of pend.colonne || GARA_INCONTRO) r[c] = loc[c];
                 r.gara_modificato_il = loc.gara_modificato_il;
                 st.put(r);
             } else { st.put(cl); ob.delete(chiave); }

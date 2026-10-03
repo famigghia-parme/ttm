@@ -188,6 +188,166 @@ function agganciaGruppi(vista, contenitore) {
     }));
 }
 
+// ---------------- punti: asciugamano e time-out ----------------
+// Uguali nelle due PWA (e nel Live del PC: SetService.Asciugamano,
+// SetService.SecondiTimeout).
+
+// Pausa per l'asciugamano: ogni 6 punti dall'inizio del set (6, 12, 18...)
+const asciugamano = (pc, po) => (pc + po) > 0 && (pc + po) % 6 === 0;
+
+// Colonna stretta al centro fra i due pulsanti punto: si colora (e mostra
+// la scritta) quando i giocatori possono asciugarsi. C'e' sempre, anche
+// spenta, cosi' i pulsanti non cambiano larghezza.
+const htmlAsciugamano = (pc, po) => asciugamano(pc, po)
+    ? '<div class="lvAsciuga on"><span>ASCIUGAMANO</span></div>'
+    : '<div class="lvAsciuga"></div>';
+
+// Time-out: un minuto, uno solo per giocatore (o coppia) in ogni partita.
+const SECONDI_TIMEOUT = 60;
+
+// Riga sotto il tabellone: un pulsante per lato, sotto la colonna del suo
+// giocatore. sinistra / destra = { casa, usato } nell'ordine dello schermo.
+function htmlPulsantiTimeout(sinistra, destra) {
+    const b = l => l.usato
+        ? '<button class="pieno chiaro lvTo" disabled>Time-out usato ✔</button>'
+        : `<button class="pieno chiaro lvTo" data-to="${l.casa ? 1 : 0}">⏱ Time-out</button>`;
+    return `<div class="lvCampo lvToRiga">${b(sinistra)}<div class="lvToCentro"></div>${b(destra)}</div>`;
+}
+
+// Fascia del time-out in corso, sopra il tabellone. I secondi li scrive
+// avviaContoTimeout: qui non ci sono, cosi' la pagina non si ridisegna a
+// ogni secondo.
+function htmlTimeoutInCorso(nome, casa) {
+    return `<div class="lvTimeout"><b>⏱ TIME-OUT</b>${esc(nome)}
+        <span id="lvTimeoutSec"></span>
+        <button class="pieno chiaro" id="lvToAnnulla" data-to="${casa ? 1 : 0}">Chiamato per errore: annulla</button></div>`;
+}
+
+// Conto alla rovescia nella fascia. fine = istante (millisecondi,
+// orologio di questo telefono) in cui il minuto scade; alTermine viene
+// chiamata una volta, allo scadere.
+let _toTimer = null;
+function fermaContoTimeout() { clearInterval(_toTimer); _toTimer = null; }
+function avviaContoTimeout(fine, alTermine) {
+    const tic = () => {
+        const el = $('#lvTimeoutSec');
+        if (!el) { fermaContoTimeout(); return; }           // fascia non piu' sullo schermo
+        const restano = Math.ceil((fine - Date.now()) / 1000);
+        if (restano <= 0) { fermaContoTimeout(); el.textContent = '0:00'; alTermine?.(); return; }
+        el.textContent = `${Math.floor(restano / 60)}:${String(restano % 60).padStart(2, '0')}`;
+    };
+    fermaContoTimeout();
+    _toTimer = setInterval(tic, 250);
+    tic();
+}
+
+// ---------------- dati del referto ----------------
+// Cio' che il referto chiede oltre a formazione e punteggi: impianto,
+// giudice arbitro, defibrillatore, orari, provvedimenti (sul PC: dialog
+// "Dati referto"). Stesso modulo e stesso riepilogo nelle due PWA
+// (referto.js li riempie: dal database del telefono o chiedendo al PC).
+// d = { luogo, tavolo, palline, giudiceArbitro, qualificaArbitro,
+//       defibrillatore (true / false / null = non indicato), operatoreDae,
+//       oraInizio, oraFine ('HH:mm' oppure ''), provvedimenti }
+// Il campo di gara (luogo) e' del calendario: qui si legge soltanto.
+
+// Tavolo, palline, defibrillatore e operatore di solito non cambiano da una
+// gara in casa all'altra: nei campi VUOTI si propongono quelli dell'ultima
+// gara in casa (prec, stessa forma di d). Ritorna true se ha proposto
+// qualcosa: si salva comunque solo con "Salva".
+function rfProponi(d, prec) {
+    if (!prec) return false;
+    let proposto = false;
+    for (const c of ['tavolo', 'palline', 'operatoreDae'])
+        if (!d[c] && prec[c]) { d[c] = prec[c]; proposto = true; }
+    if (d.defibrillatore == null && prec.defibrillatore != null) { d.defibrillatore = prec.defibrillatore; proposto = true; }
+    return proposto;
+}
+
+function rfHtmlModulo(d, proposto) {
+    const campo = (id, etic, val, max) =>
+        `<label class="rfCampo"><span>${etic}</span><input id="${id}" maxlength="${max}" value="${esc(val || '')}"></label>`;
+    const ora = (id, etic, val) =>
+        `<label class="rfCampo"><span>${etic}</span><input type="time" id="${id}" value="${esc(val || '')}"></label>`;
+    const dae = d.defibrillatore === true ? '1' : d.defibrillatore === false ? '0' : '';
+    return `
+      ${proposto ? '<div class="avviso">Tavolo, palline e defibrillatore vuoti sono stati proposti dall\'ultima gara in casa di questa squadra: controllali prima di salvare.</div>' : ''}
+      <h4>Impianto</h4>
+      <div class="rfFisso"><span>Campo di gara</span><b>${esc(d.luogo || 'non indicato')}</b><small>Si cambia dal PC, nel calendario</small></div>
+      ${campo('rfTavolo', 'Tavolo (marca e modello)', d.tavolo, 100)}
+      ${campo('rfPalline', 'Palline (marca e modello)', d.palline, 100)}
+      <h4>Giudice arbitro</h4>
+      ${campo('rfArbitro', 'Nome e cognome', d.giudiceArbitro, 100)}
+      ${campo('rfQualifica', 'In qualità di', d.qualificaArbitro, 60)}
+      <h4>Defibrillatore</h4>
+      <label class="rfCampo"><span>Presente nell'impianto (o ambulanza / auto medica all'esterno)</span>
+        <select id="rfDae">${[['', 'Non indicato'], ['1', 'SÌ, presente'], ['0', 'NO, non presente']]
+            .map(([v, t]) => `<option value="${v}"${v === dae ? ' selected' : ''}>${t}</option>`).join('')}</select></label>
+      ${campo('rfOperatore', 'Operatore debitamente formato', d.operatoreDae, 100)}
+      <h4>Orari</h4>
+      <div class="riga">${ora('rfOraInizio', 'Inizio incontro', d.oraInizio)}${ora('rfOraFine', 'Fine incontro', d.oraFine)}</div>
+      <div class="lvInfo">Segnando i punti dal telefono o dal PC, inizio e fine si compilano da soli.</div>
+      <h4>Provvedimenti disciplinari</h4>
+      <textarea id="rfProvvedimenti" maxlength="500" rows="4">${esc(d.provvedimenti || '')}</textarea>`;
+}
+
+// I valori scritti nel modulo, nella forma di d (luogo escluso)
+function rfLeggiModulo() {
+    const t = id => $('#' + id).value.trim();
+    const dae = $('#rfDae').value;
+    return {
+        tavolo: t('rfTavolo'), palline: t('rfPalline'),
+        giudiceArbitro: t('rfArbitro'), qualificaArbitro: t('rfQualifica'),
+        defibrillatore: dae === '' ? null : dae === '1',
+        operatoreDae: t('rfOperatore'),
+        oraInizio: $('#rfOraInizio').value || '', oraFine: $('#rfOraFine').value || '',
+        provvedimenti: t('rfProvvedimenti')
+    };
+}
+
+// Riepilogo nella scheda dell'incontro: solo le righe compilate.
+function rfHtmlRiepilogo(d) {
+    const righe = [
+        ['Tavolo', d.tavolo], ['Palline', d.palline],
+        ['Giudice arbitro', [d.giudiceArbitro, d.qualificaArbitro].filter(Boolean).join(' · ')],
+        ['Defibrillatore', d.defibrillatore == null ? '' : d.defibrillatore ? 'presente' : 'NON presente'],
+        ['Operatore', d.operatoreDae],
+        ['Orari', [d.oraInizio && 'inizio ' + d.oraInizio, d.oraFine && 'fine ' + d.oraFine].filter(Boolean).join(' · ')],
+        ['Provvedimenti', d.provvedimenti]
+    ].filter(r => r[1]);
+    return righe.length
+        ? '<ul>' + righe.map(([e, v]) => `<li class="rpForm"><b>${e}</b> ${esc(v)}</li>`).join('') + '</ul>'
+        : '<p class="vuoto">Non ancora compilati</p>';
+}
+
+// Solo i campi che l'utente ha cambiato rispetto a quelli letti all'apertura
+// (prima). Si salvano solo questi: se nel frattempo i Punti hanno scritto
+// l'ora di inizio, un modulo aperto da prima non la cancella.
+function rfCambiati(prima, d) {
+    const r = {};
+    for (const c of Object.keys(d))
+        if ((d[c] ?? '') !== (prima[c] ?? '')) r[c] = d[c];
+    return r;
+}
+
+// La pagina "Dati del referto", dentro #inCorpo. r = { casa, ospite, d,
+// proposto }; toccata() a ogni modifica; indietro() e salva() sui pulsanti.
+function rfDisegnaPagina(r, toccata, indietro, salva) {
+    const c = $('#inCorpo');
+    if (!c) return;
+    c.innerHTML = `
+      <button class="pieno chiaro" id="rfIndietro">← Incontro</button>
+      <div class="lvSceltaTit">Dati del referto</div>
+      <div class="lvInfo">${esc(r.casa)} – ${esc(r.ospite)}</div>
+      ${rfHtmlModulo(r.d, r.proposto)}
+      <div id="msg"></div>
+      <button class="pieno" id="rfSalva">Salva i dati del referto</button>`;
+    c.querySelectorAll('input, select, textarea').forEach(e => e.oninput = toccata);
+    $('#rfIndietro').onclick = indietro;
+    $('#rfSalva').onclick = salva;
+    window.scrollTo(0, 0);
+}
+
 // ---------------- formazione: tendine ----------------
 // Usate dalla Formazione di tutte e due le PWA. Un atleta = { id, nome }
 // (id = uid nel cloud, numero in rete locale: si confronta come testo).

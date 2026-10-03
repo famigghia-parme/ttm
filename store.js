@@ -175,19 +175,35 @@ async function contaInAttesa() {
 // transazione: o passano tutte o nessuna.
 // Per gli incontri si timbra gara_modificato_il (il telefono non tocca il
 // calendario); per le altre tabelle modificato_il.
+// Degli incontri si ricorda anche QUALI campi di gara sono cambiati
+// (colonne, nella voce di outbox): al cloud vanno solo quelli. Cosi' chi
+// compila i dati del referto non riporta indietro il punteggio che un altro
+// telefono sta segnando, e viceversa. Un salvataggio che non cambia nessun
+// campo di gara non manda nulla.
 async function scriviLocale(righe) {
     const db = await apriDb();
     const nomi = [...new Set(righe.map(x => x.t)), 'outbox'];
     const tx = db.transaction(nomi, 'readwrite');
+    const ob = tx.objectStore('outbox');
     const ora = adesso();
     for (const { t, riga } of righe) {
         if (!riga.uid) riga.uid = nuovoUid();
         if (riga.eliminato === undefined) riga.eliminato = false;
-        if (t === 'incontri') riga.gara_modificato_il = ora;
+        const chiave = t + ':' + riga.uid;
+        const voce = { chiave, tabella: t, uid: riga.uid };
+        if (t === 'incontri') {
+            const [prima, inAttesa] = await Promise.all([idbReq(tx.objectStore(t).get(riga.uid)), idbReq(ob.get(chiave))]);
+            const cambiate = GARA_INCONTRO.filter(c => (riga[c] ?? null) !== (prima?.[c] ?? null));
+            // Voce in attesa senza elenco (scritta da una versione precedente): restano tutte
+            const tutte = !prima || (inAttesa && !inAttesa.colonne);
+            if (!tutte && !cambiate.length) { tx.objectStore(t).put(riga); continue; }
+            if (!tutte) voce.colonne = [...new Set([...(inAttesa?.colonne || []), ...cambiate])];
+            riga.gara_modificato_il = ora;
+        }
         else riga.modificato_il = ora;
         tx.objectStore(t).put(riga);
         // rev: il push cancella la voce solo se nel frattempo non e' cambiata
-        tx.objectStore('outbox').put({ chiave: t + ':' + riga.uid, tabella: t, uid: riga.uid, rev: ora + Math.random() });
+        ob.put({ ...voce, rev: ora + Math.random() });
     }
     await idbFine(tx);
     document.dispatchEvent(new Event('ttm-locale'));

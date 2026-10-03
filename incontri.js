@@ -1,8 +1,8 @@
 // TennisTavoloManager - incontri.js  (PWA cloud)
 // Elenco incontri della stagione e scheda dell'incontro, tutto dai dati
 // locali: funziona anche offline. Dalla scheda si aprono la Formazione
-// (formazione.js) e i Punti (live.js), che disegnano qui dentro, e si
-// scarica il punto per punto per la gara.
+// (formazione.js), i Punti (live.js) e i Dati del referto (referto.js),
+// che disegnano qui dentro, e si scarica il punto per punto per la gara.
 //
 // Due sezioni del menu usano questo file (stessa struttura nella PWA in
 // rete locale, wwwroot/incontri.js):
@@ -18,14 +18,16 @@ try {
 
 const inVista = modo => ({
     html: '<div id="inCorpo"></div>',
-    init: () => { inModo = modo; inAperto = null; fz = null; fzModificata = false; fzRitorno = null; lvLascia(); inElenco(); },
+    init: () => { inModo = modo; inAperto = null; fz = null; fzModificata = false; fzRitorno = null; rf = null; rfModificata = false; lvLascia(); inElenco(); },
     // Si passa a un'altra vista (Rosa, Atleti, Account): i Punti si chiudono.
     esci: () => lvLascia(),
     // Punti aperti: si ridisegnano dai dati locali (solo se e' cambiato
     // qualcosa). Formazione aperta: con modifiche non salvate non si
     // ridisegna nulla (si perderebbero); senza, si ricarica con i dati nuovi.
+    // Lo stesso per i Dati del referto.
     suDati: () => lv ? lvDisegna()
         : fz ? (fzModificata ? null : fzApri(fz.uid, fz.sel, true))
+        : rf ? (rfModificata ? null : rfApri(rf.uid, true))
         : inAperto ? inScheda(inAperto) : inElenco()
 });
 viste.incontri = inVista('incontri');
@@ -109,7 +111,7 @@ async function inElenco() {
     c.querySelectorAll('li[data-uid]').forEach(li => li.onclick = () => punti ? lvApri(li.dataset.uid) : inScheda(li.dataset.uid));
 }
 
-// Scheda: dati, partite con set, formazioni. Sola lettura.
+// Scheda: dati, partite con set, formazioni, dati del referto. Sola lettura.
 async function inScheda(uid) {
     inAperto = uid;
     const c = $('#inCorpo');
@@ -176,15 +178,19 @@ async function inScheda(uid) {
         <button class="pieno" id="inFormazione">✏️ Formazione</button>
         <button class="pieno chiaro" id="inScarica">${scaricato ? '📥 Scaricato — aggiorna' : '📥 Scarica per la gara'}</button>
         <div class="lvInfo">${scaricato ? 'Ultimo scarico: ' + new Date(scaricato).toLocaleString('it-IT') : 'Da fare prima di partire, con la rete: poi funziona anche senza.'}</div>`}
+      <button class="pieno chiaro" id="inReferto">📋 Dati del referto</button>
       <div id="msg"></div>
       <h4>Partite</h4>${righePartite.length ? '<ul>' + righePartite.join('') + '</ul>' : '<p class="vuoto">Partite non ancora create</p>'}
-      <h4>Formazioni</h4>${squadra(x.casa, true)}${squadra(x.ospite, false)}`;
+      <h4>Formazioni</h4>${squadra(x.casa, true)}${squadra(x.ospite, false)}
+      <h4>Dati del referto</h4>${rfHtmlRiepilogo(rfDaIncontro(i))}`;
 
     $('#inIndietro').onclick = inElenco;
     const bp = $('#inPunti');
     if (bp) bp.onclick = () => lvApri(uid);
     const bf = $('#inFormazione');
     if (bf) bf.onclick = () => fzApri(uid);
+    // Anche a incontro terminato: ora di fine e provvedimenti si scrivono dopo
+    $('#inReferto').onclick = () => rfApri(uid);
     const b = $('#inScarica');
     if (b) b.onclick = async () => {
         b.disabled = true; msg('Scarico in corso…', true);

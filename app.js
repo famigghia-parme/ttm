@@ -185,7 +185,15 @@ viste.account = {
       <div id="msg"></div>
       ${altro ? `<button class="pieno chiaro" id="acAmbiente" style="margin-top:24px">Passa all'ambiente ${altro === 'prova' ? 'PROVA' : 'REALE'}</button>` : ''}
       <button class="pieno chiaro" id="acEsci" style="margin-top:24px">Esci</button>`;
-        $('#acSync').onclick = async () => { await Sync.esegui(); viste.account.init(); };
+        // Sempre una risposta visibile: senza, non si capisce se il pulsante ha fatto qualcosa
+        $('#acSync').onclick = async () => {
+            await Sync.esegui();
+            viste.account.init();
+            const riuscita = Sync.stato === 'ok';
+            avviso(riuscita ? 'Sincronizzazione riuscita ✓'
+                : Sync.stato === 'offline' ? 'Niente rete: sincronizzazione non riuscita'
+                : 'Sincronizzazione non riuscita' + (Sync.messaggio ? ': ' + Sync.messaggio : ''), riuscita);
+        };
         const ba = $('#acAmbiente');
         if (ba) ba.onclick = async () => {
             // Nulla si perde: dati e modifiche in attesa restano nell'ambiente lasciato.

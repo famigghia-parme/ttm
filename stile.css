@@ -101,6 +101,21 @@ li.giocato { opacity: .8; }
    quando lo spazio e' poco. */
 .lvDot { width: 26px; height: 26px; border-radius: 50%; margin: 8px auto 6px; background: transparent; flex: none; }
 .lvDot.on { background: #FBBF24; }
+/* Asciugamano: colonna stretta al centro fra i due pulsanti punto. Sempre
+   presente (spenta e' vuota, cosi' i pulsanti non cambiano larghezza); ogni
+   6 punti si colora e mostra la scritta in verticale. Non e' solo colore:
+   da spenta non c'e' nulla, da accesa c'e' il riquadro con la scritta. */
+.lvAsciuga { flex: none; width: 30px; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
+.lvAsciuga.on { background: #22d3ee; border: 3px solid #0e7490; }
+.lvAsciuga span { writing-mode: vertical-rl; font-weight: 800; font-size: 13px; letter-spacing: 2px; color: #083344; }
+/* Time-out: un pulsante per lato sotto il tabellone, fascia col conto alla rovescia sopra */
+.lvToRiga { margin: 0 0 8px; }
+button.lvTo { flex: 1; width: auto; min-width: 0; margin: 0; padding: 8px 4px; font-size: 14px; }
+.lvToCentro { flex: none; width: 30px; }
+.lvTimeout { background: #111; color: #fff; border-radius: 12px; padding: 10px 12px; margin: 8px 0; text-align: center; font-size: 14px; }
+.lvTimeout b { display: block; font-size: 15px; letter-spacing: 1px; color: #fbbf24; }
+#lvTimeoutSec { display: block; font-size: 48px; font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.lvTimeout button.pieno { font-size: 13px; padding: 6px; margin: 6px 0 0; }
 /* Selettore della partita (due tavoli) */
 .lvSceltaTit { font-weight: 600; margin: 10px 0 6px; }
 .lvPart { display: block; width: 100%; text-align: left; margin-bottom: 6px; }
@@ -142,6 +157,15 @@ li.rsTesta .rsNum { font-size: 12px; }
 .fzRiga span { width: 92px; font-weight: 600; flex: none; }
 .fzRiga select, .fzRiga input { flex: 1; min-width: 0; }
 .fzRiga[hidden] { display: none; }   /* display:flex sopra vince sull'attributo hidden */
+
+/* Dati del referto (comune.js: rfHtmlModulo): etichetta sopra, campo sotto */
+.rfCampo { display: block; margin: 6px 0; flex: 1; min-width: 0; }
+.rfCampo span { display: block; font-size: 13px; font-weight: 600; color: var(--grigio); }
+.rfFisso { margin: 6px 0; padding: 8px 10px; border: 1px dashed var(--bordo); border-radius: 8px; background: #f7f7f7; }
+.rfFisso span, .rfFisso small { display: block; font-size: 13px; color: var(--grigio); }
+.rfFisso span { font-weight: 600; }
+textarea { width: 100%; font: inherit; font-size: 16px; padding: 10px; margin: 4px 0;
+           border: 1px solid var(--bordo); border-radius: 8px; background: #fff; resize: vertical; }
 
 /* Avviso a comparsa (comune.js: avviso) sopra la barra in basso */
 #avviso { position: fixed; left: 16px; right: 16px; bottom: calc(80px + env(safe-area-inset-bottom)); z-index: 5;
