@@ -12,8 +12,8 @@
 const CONFIG = {
     AMBIENTI: {
         reale: {	
-    SUPABASE_URL: 'https://gngoyidriidkqexsigug.supabase.co',
-    SUPABASE_KEY: 'sb_publishable_aQa5bErHOLEkXmTVjtfhgQ_bWptJ1D5'
+    SUPABASE_URL: 'https://kednlvkalkldkoctgnyw.supabase.co',
+    SUPABASE_KEY: 'sb_publishable_tQmct8qCh38L92ljDK6ngg_0qYj7UM1'
         },
         prova: {
     SUPABASE_URL: 'https://gngoyidriidkqexsigug.supabase.co',
