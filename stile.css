@@ -1,0 +1,165 @@
+/* TennisTavoloManager - stile.css
+   UNICO foglio di stile delle due PWA: questo file sta IDENTICO in
+   pwa-cloud/ (telefono via cloud) e in TennisTavoloManager/wwwroot/
+   (telefono in rete locale). Si modifica in pwa-cloud/ e si copia
+   nell'altra cartella: il test test-comune.js controlla che siano uguali.
+
+   ATTENZIONE: nel CSS i commenti si scrivono SOLO cosi', mai con "//".
+   Con "//" il parser prende il testo per un selettore e scarta la regola
+   che segue (e' gia' successo: pallino del servizio invisibile). */
+
+:root { --verde: #1b5e20; --bordo: #ddd; --grigio: #666; }
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+body { margin: 0; font-family: system-ui,-apple-system,"Segoe UI",sans-serif; padding-bottom: 72px; }
+header { background: var(--verde); color: #fff; padding: 12px 16px; font-weight: 600;
+         position: sticky; top: 0; z-index: 2; display: flex; justify-content: space-between; gap: 8px; }
+/* Ambiente di Prova: intestazione arancione e scritta PROVA */
+body.prova header { background: #ff8c00; color: #000; }
+#ambiente { background: #000; color: #ff8c00; border-radius: 4px; padding: 0 6px; margin-left: 6px; font-size: 12px; }
+#ambiente:empty { display: none; }
+.ambProva { color: #e67300; }
+#stato { font-size: 12px; font-weight: 400; opacity: .9; text-align: right; }
+#aggiorna { background: #fbbf24; color: #222; padding: 10px 16px; font-weight: 600; cursor: pointer; }
+main { padding: 12px 16px; }
+
+/* ---------- barra in basso: stesse voci della Home, nello stesso ordine ---------- */
+nav { position: fixed; bottom: 0; left: 0; right: 0; display: flex; background: #fff;
+      border-top: 1px solid var(--bordo); padding-bottom: env(safe-area-inset-bottom); z-index: 3; }
+nav[hidden] { display: none; }   /* display:flex sopra vince sull'attributo hidden */
+nav button { flex: 1; min-width: 0; border: 0; border-top: 3px solid transparent; background: none;
+             padding: 6px 2px 8px; font-size: 11px; color: var(--grigio); font-family: inherit; }
+nav button span { display: block; font-size: 19px; line-height: 1.25; }
+/* La voce attiva NON si distingue dal colore del testo (verde scuro e nero si
+   confondono): ha la barra sopra, lo sfondo chiaro e il grassetto. */
+nav button.att { color: #000; font-weight: 700; border-top-color: var(--verde); background: #e8f5e9; }
+
+/* ---------- Home: un pulsante grande per ogni sezione ---------- */
+.hmGriglia { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 4px; }
+.hmVoce { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 16px 8px;
+          border: 1px solid var(--bordo); border-radius: 14px; background: #fff; font-family: inherit;
+          font-size: 17px; color: #000; box-shadow: 0 1px 4px rgba(0,0,0,.12); touch-action: manipulation; }
+.hmVoce:active { background: #e8f5e9; }
+.hmVoce:last-child:nth-child(odd) { grid-column: 1 / -1; }   /* voci dispari: l'ultima a tutta larghezza */
+.hmIcona { font-size: 36px; line-height: 1.2; }
+.hmVoce small { color: var(--grigio); font-size: 12px; text-align: center; }
+.hmInfo { color: var(--grigio); font-size: 13px; text-align: center; margin: 16px 0 4px; }
+
+.vuoto { color: #888; text-align: center; margin-top: 24px; list-style: none; }
+
+/* font 16px sui campi: sotto i 16 Safari iOS fa zoom automatico */
+select, input, button.pieno { width: 100%; font-size: 16px; padding: 10px; margin: 4px 0;
+                              border: 1px solid var(--bordo); border-radius: 8px; background: #fff; }
+button.pieno { background: var(--verde); color: #fff; border: 0; font-weight: 600; }
+button.chiaro { background: #eee; color: #333; }
+button:disabled { opacity: .5; }
+form { border: 1px solid var(--bordo); border-radius: 10px; padding: 10px; margin: 8px 0; background: #f7f7f7; }
+.riga { display: flex; gap: 8px; }
+.riga > * { flex: 1; }
+.sesso { display: flex; gap: 16px; padding: 8px 2px; }
+#msg { color: #b00; min-height: 1.2em; margin: 4px 0; font-size: 14px; }
+ul { list-style: none; padding: 0; margin: 8px 0; }
+li.atleta { padding: 10px 4px; border-bottom: 1px solid #eee; }
+li.atleta span { float: right; color: var(--grigio); font-size: 13px; }
+li.cliccabile { cursor: pointer; }
+li small { color: var(--grigio); }
+h4 { margin: 14px 0 4px; color: var(--verde); }
+.tabs { display: flex; gap: 6px; margin: 8px 0; }
+.tabs button { flex: 1; padding: 10px 6px; border: 1px solid var(--bordo); border-radius: 8px; background: #fff; font-size: 14px; }
+.tabs button.att { background: var(--verde); color: #fff; border-color: var(--verde); }
+
+/* Casella "anche le altre squadre": la regola generale mette gli input al 100% */
+.flagTutti { display: flex; align-items: center; gap: 8px; margin: 4px 0 8px; font-size: 14px; }
+.flagTutti input { width: auto; margin: 0; }
+li.nostro { border-left: 4px solid var(--verde); padding-left: 8px; }
+li.giocato { opacity: .8; }
+
+.lvTesta { display: flex; align-items: center; gap: 8px; margin: 8px 0; font-size: 14px; }
+.lvTesta b { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lvTesta b:last-child { text-align: right; }
+.lvTot { font-size: 22px; font-weight: 700; flex: none; }
+.lvTot small.lvEtic { display: block; font-size: 10px; font-weight: 400; color: var(--grigio); text-align: center; }
+.lvInfo { color: var(--grigio); font-size: 13px; text-align: center; margin: 4px 0; }
+
+/* Punti (live.js). touch-action: niente zoom da doppio tocco sui pulsanti punto */
+.lvCampo { display: flex; gap: 8px; margin: 8px 0; }
+.lvLato { flex: 1; border: 0; border-radius: 14px; color: #fff; padding: 14px 6px; min-height: 42vh;
+          display: flex; flex-direction: column; justify-content: space-between; align-items: center;
+          font-family: inherit; touch-action: manipulation; user-select: none; -webkit-user-select: none; }
+.lvLato.casa { background: #3B82F6; }
+.lvLato.ospite { background: #EF4444; }
+.lvLato:active { filter: brightness(.85); }
+.lvNomi { font-size: 14px; font-weight: 600; text-align: center; word-break: break-word; }
+.lvPunti { font-size: 88px; font-weight: 800; line-height: 1; }
+.lvSet { font-size: 15px; opacity: .9; }
+.lvServe { text-align: center; font-size: 14px; margin: 6px 0; }
+.lvDom { font-weight: 600; margin: 10px 0 2px; }
+.lvRadio { display: block; padding: 8px 4px; }
+.lvRadio input { width: auto; margin-right: 6px; }
+/* Pallino del servizio: dentro il pulsante, fra punteggio e set. Occupa
+   sempre lo spazio (spento e' trasparente), cosi' un nome lungo che va a
+   capo non sposta punteggio e set; flex:none perche' senza si schiaccia
+   quando lo spazio e' poco. */
+.lvDot { width: 26px; height: 26px; border-radius: 50%; margin: 8px auto 6px; background: transparent; flex: none; }
+.lvDot.on { background: #FBBF24; }
+/* Selettore della partita (due tavoli) */
+.lvSceltaTit { font-weight: 600; margin: 10px 0 6px; }
+.lvPart { display: block; width: 100%; text-align: left; margin-bottom: 6px; }
+.lvPart.fatta { opacity: .5; }
+.lvPart small { display: block; color: var(--grigio); font-weight: 400; }
+
+/* Scheda dell'incontro e riepilogo */
+.rpPart { padding: 8px 4px; border-bottom: 1px solid #eee; }
+.rpVince { font-weight: 700; color: var(--verde); }
+.rpSq { margin: 10px 0 2px; }
+.rpSq small { display: block; color: var(--grigio); }
+.rpForm { padding: 4px 2px; }
+
+/* Rosa: riga intera toccabile, azione a destra */
+.rsRiga { display: flex; align-items: center; gap: 8px; padding: 10px 4px; border-bottom: 1px solid #eee; cursor: pointer; }
+.rsRiga > div { flex: 1; }
+.rsRiga small { display: block; color: var(--grigio); font-size: 13px; }
+.rsRiga.dentro { background: #e8f5e9; }
+.rsAz { flex: none; width: 36px; height: 36px; line-height: 36px; text-align: center; border-radius: 50%; background: #eee; font-weight: 700; font-size: 18px; }
+.rsRiga.dentro .rsAz { background: #ffcdd2; }
+.rsConta { font-weight: 600; color: var(--verde); margin: 6px 0; }
+.rsSalva { position: sticky; bottom: 80px; }
+/* Elenco squadre della Rosa: nome a sinistra (va a capo se lungo), numero
+   in rosa in una colonna a destra, sempre allineata. La nostra squadra
+   NON si distingue dal colore del testo (verde scuro e nero si
+   confondono): ha una stella davanti al nome, lo sfondo chiaro e una
+   barra a sinistra. Il nome resta nero, come gli altri. */
+.rsSq { display: flex; align-items: center; gap: 10px; }
+.rsSq b { flex: 1; min-width: 0; }
+.rsSq.nostra { background: #e8f5e9; border-left: 6px solid var(--verde); padding-left: 8px; }
+.rsSq.nostra b::before { content: "\2605\00a0"; color: #e65100; }
+.rsNum { flex: none; width: 56px; text-align: right; color: var(--grigio); font-size: 14px; }
+li.rsTesta { display: flex; gap: 10px; padding: 6px 4px 2px; font-size: 12px; color: var(--grigio); }
+li.rsTesta div:first-child { flex: 1; }
+li.rsTesta .rsNum { font-size: 12px; }
+
+/* Formazione */
+.fzRiga { display: flex; align-items: center; gap: 8px; }
+.fzRiga span { width: 92px; font-weight: 600; flex: none; }
+.fzRiga select, .fzRiga input { flex: 1; min-width: 0; }
+.fzRiga[hidden] { display: none; }   /* display:flex sopra vince sull'attributo hidden */
+
+/* Avviso a comparsa (comune.js: avviso) sopra la barra in basso */
+#avviso { position: fixed; left: 16px; right: 16px; bottom: calc(80px + env(safe-area-inset-bottom)); z-index: 5;
+          background: #b00020; color: #fff; padding: 12px 14px; border-radius: 10px; text-align: center;
+          font-weight: 600; box-shadow: 0 4px 14px rgba(0,0,0,.3); }
+#avviso.ok { background: var(--verde); }
+#avviso[hidden] { display: none; }
+
+/* Elenchi raggruppati (comune.js: htmlGruppi): federazione > campionato > girone */
+h3.grFed { margin: 16px 0 6px; padding: 4px 8px; background: var(--verde); color: #fff; border-radius: 6px; font-size: 14px; letter-spacing: .5px; }
+details.gr { border: 1px solid var(--bordo); border-radius: 8px; margin: 6px 0; background: #fff; }
+details.gr > summary { padding: 12px 10px; cursor: pointer; list-style: none; display: flex; align-items: center; gap: 6px; }
+details.gr > summary::-webkit-details-marker { display: none; }
+details.gr > summary::before { content: "▸"; color: var(--grigio); width: 14px; flex: none; }
+details.gr[open] > summary::before { content: "▾"; }
+details.gr > summary span { margin-left: auto; background: #eee; border-radius: 10px; padding: 1px 9px; font-size: 13px; color: var(--grigio); }
+details.gr > ul { margin: 0; padding: 0 10px 4px; }
+details.gr.prossimi { border-color: var(--verde); border-width: 2px; margin-bottom: 12px; }
+
+/* Banda gialla: cose da sistemare (doppio da dichiarare, squadra senza atleti) */
+.avviso { background: #fff3cd; border: 1px solid #e0c060; border-radius: 8px; padding: 8px 10px; margin: 8px 0; font-size: 14px; color: #5a4500; }

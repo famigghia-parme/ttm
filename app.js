@@ -1,49 +1,16 @@
 // TennisTavoloManager - app.js  (PWA cloud)
-// Guscio dell'app: login, barra di stato, navigazione, vista Account,
-// service worker, sync periodico. Le viste stanno in incontri.js, rosa.js,
-// atleti.js e si registrano in `viste`.
+// Guscio dell'app via cloud: login, barra di stato, vista Account, service
+// worker, sync periodico. Menu (Home e barra in basso), avvisi ed elenchi
+// raggruppati stanno in comune.js, uguale a quello della PWA in rete locale.
+// Le viste stanno in incontri.js (Incontri e Punti), rosa.js, atleti.js e
+// si registrano in `viste`.
 
-const $ = s => document.querySelector(s);
-const esc = s => String(s ?? '').replace(/[&<>"']/g,
-    c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-
-// Avviso a comparsa sopra la barra in basso: si vede sempre, anche quando
-// #msg e' fuori schermo (in fondo a una lista lunga) o la vista si ridisegna.
-let _avvisoTimer = null;
-function avviso(t, ok = false) {
-    const el = $('#avviso');
-    if (!el) return;
-    el.textContent = t;
-    el.className = ok ? 'ok' : '';
-    el.hidden = false;
-    clearTimeout(_avvisoTimer);
-    _avvisoTimer = setTimeout(() => { el.hidden = true; }, ok ? 2500 : 5000);
-}
-
-// Messaggio della vista (#msg). Le conferme (ok) compaiono SEMPRE anche come
-// avviso; gli errori solo se #msg non e' sullo schermo. Prima il "Salvata"
-// della rosa finiva in fondo alla lista e non si vedeva (02/10).
-function msg(t, ok = false) {
-    const m = $('#msg');
-    if (m) { m.style.color = ok ? 'var(--verde)' : ''; m.textContent = t; }
-    if (!t) return;
-    const r = m?.getBoundingClientRect();
-    const visibile = !!r && r.top >= 0 && r.bottom <= window.innerHeight - 64;   // 64 = barra in basso
-    if (ok || !visibile) avviso(t, ok);
-}
-
-const viste = {};
 // Versione letta dal ?v= con cui index.html carica questo file: un posto in meno da aggiornare
 const VERSIONE_APP = new URL(document.currentScript.src).searchParams.get('v') || '?';
-let vistaCorrente = null;
 
-function mostra(nome) {
-    viste[vistaCorrente]?.esci?.();      // la vista che si lascia chiude le sue cose (Punti)
-    vistaCorrente = nome;
-    try { localStorage.setItem('ttm.vista', nome); } catch { }
-    document.querySelectorAll('nav button').forEach(b => b.classList.toggle('att', b.dataset.v === nome));
-    $('#vista').innerHTML = viste[nome].html;
-    viste[nome].init?.();
+// Riga in fondo alla Home (comune.js la chiama se esiste)
+function infoHome(el) {
+    el.innerHTML = `Via cloud · ambiente <b>${PROVA ? 'PROVA' : 'REALE'}</b> · versione ${esc(VERSIONE_APP)}`;
 }
 
 // ---------------- sync dopo una modifica ----------------
@@ -97,6 +64,15 @@ function classificaFitet(affiliazioni, S, stagione) {
 }
 const nomeAtleta = a => a ? `${a.cognome} ${a.nome}` : '';
 
+// Numero (codice) della societa' nella sua federazione: FITET = codice_fitet
+// (es. "2538"); CSI = codice_csi (es. "02400002", il "Codice societa'" del
+// sito CSI). Le societa' CSI nate dall'import dei tesserati lo hanno ancora
+// in codice_fitet: si guarda anche li'.
+function codiceSocieta(s) {
+    if (!s) return '';
+    return (federazione(s.tipo) === 'CSI' ? (s.codice_csi || s.codice_fitet) : s.codice_fitet) || '';
+}
+
 // Stessa etichetta di Partita.EtichettaOrdine sul PC
 function etichettaPartita(p) {
     if (p.tipo === 'Doppio') return 'Doppio';
@@ -105,94 +81,12 @@ function etichettaPartita(p) {
     return `${{ A: 'A', B: 'B', C: 'C' }[p.posto_abc] || 'D'} - ${{ A: 'X', B: 'Y', C: 'Z' }[p.posto_xyz] || 'D'}`;
 }
 
-const ORDINE_RUOLI = ['A', 'B', 'C', 'Riserva1', 'Riserva2', 'Riserva3', 'Capitano', 'Allenatore', 'Medico', 'Dirigente'];
-function etichettaRuolo(r, abc) {
-    if (r.length === 1) return abc ? r : { A: 'X', B: 'Y', C: 'Z' }[r];
-    return { Riserva1: 'Ris. 1', Riserva2: 'Ris. 2', Riserva3: 'Ris. 3', Medico: 'Medico' }[r] || r;
-}
-
 // "sab 04/10 20:30" (data_ora e' ora locale, senza fuso)
 function dataBreve(s) {
     if (!s) return 'data da definire';
     const d = new Date(s);
     return d.toLocaleDateString('it-IT', { weekday: 'short', day: '2-digit', month: '2-digit' }) + ' ' +
         d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
-}
-
-// ---------------- elenchi raggruppati ----------------
-// Tre livelli: federazione (FITET, CSI) > campionato > girone. Ogni gruppo
-// si apre e si chiude con un tocco; quelli aperti si ricordano per vista.
-// Con un solo gruppo non c'e' nulla da scegliere: resta aperto.
-// voci: [{ tipo, campionato, girone, ... }] gia' nell'ordine voluto dentro
-// il gruppo; htmlVoce(voce) -> '<li>...</li>'. testa (facoltativa) = html
-// messo in cima a ogni gruppo, es. la riga con i nomi delle colonne.
-const ORDINE_FEDERAZIONI = { FITET: 0, CSI: 1 };
-
-function gruppiAperti(vista) {
-    try { return JSON.parse(localStorage.getItem('ttm.gruppi.' + vista) || '[]'); } catch { return []; }
-}
-
-function htmlGruppi(vista, voci, htmlVoce, testa = '') {
-    const gruppi = new Map();
-    for (const v of voci) {
-        const k = [v.tipo || '', v.campionato || '', v.girone || ''].join('|');
-        if (!gruppi.has(k)) gruppi.set(k, { k, tipo: v.tipo || '', campionato: v.campionato || '', girone: v.girone || '', voci: [] });
-        gruppi.get(k).voci.push(v);
-    }
-    const ordinati = [...gruppi.values()].sort((a, b) =>
-        (ORDINE_FEDERAZIONI[a.tipo] ?? 9) - (ORDINE_FEDERAZIONI[b.tipo] ?? 9)
-        || a.tipo.localeCompare(b.tipo, 'it')
-        || a.campionato.localeCompare(b.campionato, 'it')
-        || a.girone.localeCompare(b.girone, 'it'));
-    const aperti = gruppiAperti(vista);
-    let h = '', fed = null;
-    for (const g of ordinati) {
-        if (g.tipo !== fed) { fed = g.tipo; h += `<h3 class="grFed">${esc(fed || 'Altro')}</h3>`; }
-        h += `<details class="gr" data-k="${esc(g.k)}"${ordinati.length === 1 || aperti.includes(g.k) ? ' open' : ''}>
-          <summary><b>${esc(g.campionato)}</b>${g.girone ? ' · girone ' + esc(g.girone) : ''}<span>${g.voci.length}</span></summary>
-          <ul>${testa}${g.voci.map(htmlVoce).join('')}</ul></details>`;
-    }
-    return h;
-}
-
-// "Prossimi": gli incontri delle NOSTRE squadre nel prossimo giorno di gara
-// (oggi compreso), tutti insieme in un gruppo richiudibile come quelli dei
-// gironi. voci = incontri non terminati con { nostro, quando } dove quando
-// e' la data-ora (ISO locale) o null. Ritorna { giorno: 'sab 10/10', voci }
-// in ordine di ora, oppure null se non c'e' nessuna gara in arrivo.
-function prossimoGiorno(voci) {
-    const oggi = new Date(); oggi.setHours(0, 0, 0, 0);
-    const futuri = voci.filter(v => v.nostro && v.quando && new Date(v.quando) >= oggi)
-        .sort((a, b) => new Date(a.quando) - new Date(b.quando));
-    if (!futuri.length) return null;
-    const giorno = new Date(futuri[0].quando).toDateString();
-    return {
-        giorno: new Date(futuri[0].quando).toLocaleDateString('it-IT', { weekday: 'short', day: '2-digit', month: '2-digit' }),
-        voci: futuri.filter(v => new Date(v.quando).toDateString() === giorno)
-    };
-}
-
-// Aperto finche' l'utente non lo chiude (al contrario dei gironi).
-function htmlProssimi(p, htmlVoce) {
-    if (!p) return '';
-    let chiuso = false;
-    try { chiuso = localStorage.getItem('ttm.prossimiChiusi') === '1'; } catch { }
-    return `<details class="gr prossimi" data-k="*prossimi"${chiuso ? '' : ' open'}>
-      <summary><b>Prossimi</b> · ${esc(p.giorno)}<span>${p.voci.length}</span></summary>
-      <ul>${p.voci.map(htmlVoce).join('')}</ul></details>`;
-}
-
-// Da chiamare dopo aver messo l'html nella pagina: ricorda i gruppi aperti.
-function agganciaGruppi(vista, contenitore) {
-    contenitore.querySelectorAll('details.gr').forEach(d => d.addEventListener('toggle', () => {
-        if (d.dataset.k === '*prossimi') {
-            try { localStorage.setItem('ttm.prossimiChiusi', d.open ? '0' : '1'); } catch { }
-            return;
-        }
-        const aperti = new Set(gruppiAperti(vista));
-        if (d.open) aperti.add(d.dataset.k); else aperti.delete(d.dataset.k);
-        try { localStorage.setItem('ttm.gruppi.' + vista, JSON.stringify([...aperti])); } catch { }
-    }));
 }
 
 // ---------------- barra di stato ----------------
@@ -260,9 +154,7 @@ function mostraLogin(avviso = '') {
 let _avviato = false;
 function entra() {
     $('#nav').hidden = false;
-    let v = 'incontri';
-    try { v = localStorage.getItem('ttm.vista') || v; } catch { }
-    mostra(viste[v] ? v : 'incontri');
+    mostra('home');
     if (_avviato) return;
     _avviato = true;
     Sync.esegui();
@@ -350,7 +242,7 @@ function registraSw() {
 
 // ---------------- avvio ----------------
 async function avvio() {
-    document.querySelectorAll('nav button').forEach(b => b.onclick = () => mostra(b.dataset.v));
+    disegnaNav();
     document.addEventListener('ttm-stato', () => {
         aggiornaStato();
         if (vistaCorrente === 'account' && !Sync.inCorso) viste.account.init();

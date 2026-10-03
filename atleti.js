@@ -12,11 +12,13 @@
 let atSoc = '';                 // '' = tutte le societa'
 try { atSoc = localStorage.getItem('ttm.societa') || ''; } catch { }
 let atRighe = [];               // un tesseramento per riga (vedi atCarica)
+let atSocieta = new Map();      // uid -> societa' (per il numero della societa' scelta)
 const AT_MAX = 80;              // oltre, si chiede di scrivere qualche lettera in piu'
 
 viste.atleti = {
     html: `
       <select id="selSoc"></select>
+      <div id="socInfo" class="lvInfo"></div>
       <input id="cerca" type="search" placeholder="Cerca cognome e nome…" autocomplete="off">
       <button id="btnNuovo" class="pieno">+ Nuovo atleta</button>
       <form id="frmNuovo" hidden autocomplete="off">
@@ -45,6 +47,7 @@ async function atInit() {
     const stag = await stagioneCorrente();
     const [societa, squadre, campionati] = await Promise.all(['societa', 'squadre', 'campionati'].map(tutti));
     const C = perUid(campionati);
+    atSocieta = perUid(societa);
     // Le societa' delle nostre squadre nella stagione: in cima alla tendina
     const nostre = new Set(squadre.filter(s => s.nostra_squadra && C.get(s.campionato_uid)?.stagione === stag).map(s => s.societa_uid));
     const perNome = (a, b) => a.nome.localeCompare(b.nome, 'it');
@@ -106,6 +109,10 @@ async function atCarica() {
 function atDisegna() {
     const lista = $('#lista');
     if (!lista) return;
+    // Societa' scelta: federazione e numero (codice) della societa', se c'e'
+    const scelta = atSocieta.get(atSoc), info = $('#socInfo');
+    if (info) info.textContent = scelta
+        ? `${federazione(scelta.tipo)} · codice società: ${codiceSocieta(scelta) || 'non indicato'}` : '';
     // Ogni parola scritta deve esserci, in qualsiasi ordine: "mario ros" trova "Rossi Mario"
     const parole = atNorma($('#cerca')?.value).split(/\s+/).filter(Boolean);
     const trova = r => parole.every(p => r.chiave.includes(p));

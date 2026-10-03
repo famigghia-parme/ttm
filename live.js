@@ -1,6 +1,7 @@
 // TennisTavoloManager - live.js  (PWA cloud)
 // Vista Punti: il conteggio dei punti dal telefono, sui dati locali. Si apre
-// dalla scheda dell'incontro (incontri.js) e disegna dentro #inCorpo.
+// dalla scheda dell'incontro (sezione Incontri) oppure direttamente
+// dall'elenco della sezione Punti (incontri.js) e disegna dentro #inCorpo.
 // Funziona anche senza rete: ogni tocco e' una scrittura sul telefono
 // (scriviLocale), che parte al cloud appena possibile.
 //
@@ -265,7 +266,8 @@ async function lvDisegna(forza) {
     if (lv.partita && !g) { lv.partita = null; lvRicorda(lv.uid, null); }
     lvVista = g ? g.chiave : '';
 
-    let h = `<button class="pieno chiaro" id="lvIndietro">← Incontro</button>
+    // Dalla sezione Punti si torna all'elenco, dalla scheda all'incontro
+    let h = `<button class="pieno chiaro" id="lvIndietro">${inModo === 'punti' ? '← Punti' : '← Incontro'}</button>
       <div class="lvTesta"><b>${esc(s.casa?.nome)}</b>
         <span class="lvTot">${s.vinteCasa} – ${s.vinteOspite}<small class="lvEtic">partite</small></span>
         <b>${esc(s.ospite?.nome)}</b></div>`;
@@ -308,7 +310,7 @@ async function lvDisegna(forza) {
     c.innerHTML = h;
     for (const [n, v] of scelte) { const x = c.querySelector(`input[name="${n}"][value="${v}"]`); if (x) x.checked = true; }
 
-    $('#lvIndietro').onclick = () => { const uid = lv.uid; lvLascia(); inScheda(uid); };
+    $('#lvIndietro').onclick = () => { const uid = lv.uid; lvLascia(); if (inModo === 'punti') inElenco(); else inScheda(uid); };
     c.querySelectorAll('.lvLato').forEach(b => b.onclick = () => lvPunto(b.dataset.casa === '1'));
     c.querySelectorAll('.lvPart[data-pid]').forEach(b => b.onclick = () => {
         lv.partita = b.dataset.pid; lvRicorda(lv.uid, lv.partita); lvDisegna(true);
