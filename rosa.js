@@ -38,9 +38,12 @@ async function rsElenco() {
         s, tipo: cp.tipo, campionato: cp.nome, girone: s.girone || '',
         n: rose.filter(r => r.squadra_uid === s.uid && r.stagione === cp.stagione).length
     }));
-    c.innerHTML = htmlGruppi('rosa', voci, v => `<li class="atleta cliccabile" data-uid="${v.s.uid}">
-          <b>${esc(v.s.nome)}</b>${v.s.nostra_squadra ? ' <small class="rsNostra">nostra</small>' : ''}
-          <span>${v.n} in rosa</span></li>`);
+    // La nostra squadra si riconosce dal COLORE del nome (prima c'era la
+    // scritta "nostra" in coda: con i nomi lunghi spostava il numero). Il
+    // numero in rosa sta in una colonna a destra, con il titolo in cima.
+    c.innerHTML = htmlGruppi('rosa', voci, v => `<li class="atleta cliccabile rsSq${v.s.nostra_squadra ? ' nostra' : ''}" data-uid="${v.s.uid}">
+          <b>${esc(v.s.nome)}</b><div class="rsNum">${v.n}</div></li>`,
+        '<li class="rsTesta"><div>Squadra</div><div class="rsNum">In rosa</div></li>');
     agganciaGruppi('rosa', c);
     c.querySelectorAll('li[data-uid]').forEach(li => li.onclick = () => rsApri(li.dataset.uid));
 }

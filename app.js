@@ -115,14 +115,15 @@ function dataBreve(s) {
 // si apre e si chiude con un tocco; quelli aperti si ricordano per vista.
 // Con un solo gruppo non c'e' nulla da scegliere: resta aperto.
 // voci: [{ tipo, campionato, girone, ... }] gia' nell'ordine voluto dentro
-// il gruppo; htmlVoce(voce) -> '<li>...</li>'.
+// il gruppo; htmlVoce(voce) -> '<li>...</li>'. testa (facoltativa) = html
+// messo in cima a ogni gruppo, es. la riga con i nomi delle colonne.
 const ORDINE_FEDERAZIONI = { FITET: 0, CSI: 1 };
 
 function gruppiAperti(vista) {
     try { return JSON.parse(localStorage.getItem('ttm.gruppi.' + vista) || '[]'); } catch { return []; }
 }
 
-function htmlGruppi(vista, voci, htmlVoce) {
+function htmlGruppi(vista, voci, htmlVoce, testa = '') {
     const gruppi = new Map();
     for (const v of voci) {
         const k = [v.tipo || '', v.campionato || '', v.girone || ''].join('|');
@@ -140,7 +141,7 @@ function htmlGruppi(vista, voci, htmlVoce) {
         if (g.tipo !== fed) { fed = g.tipo; h += `<h3 class="grFed">${esc(fed || 'Altro')}</h3>`; }
         h += `<details class="gr" data-k="${esc(g.k)}"${ordinati.length === 1 || aperti.includes(g.k) ? ' open' : ''}>
           <summary><b>${esc(g.campionato)}</b>${g.girone ? ' · girone ' + esc(g.girone) : ''}<span>${g.voci.length}</span></summary>
-          <ul>${g.voci.map(htmlVoce).join('')}</ul></details>`;
+          <ul>${testa}${g.voci.map(htmlVoce).join('')}</ul></details>`;
     }
     return h;
 }

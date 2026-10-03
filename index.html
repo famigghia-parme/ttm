@@ -106,6 +106,16 @@
         .rsConta { font-weight: 600; color: var(--verde); margin: 6px 0; }
         .rsSalva { position: sticky; bottom: 72px; }
         .rsNostra { color: var(--verde); font-weight: 700; }
+        /* Elenco squadre della Rosa: nome a sinistra (va a capo se lungo), numero
+           in rosa in una colonna a destra, sempre allineata. La nostra squadra
+           si riconosce dal colore del nome. */
+        .rsSq { display: flex; align-items: center; gap: 10px; }
+        .rsSq b { flex: 1; min-width: 0; }
+        .rsSq.nostra b { color: var(--verde); }
+        .rsNum { flex: none; width: 56px; text-align: right; color: var(--grigio); font-size: 14px; }
+        li.rsTesta { display: flex; gap: 10px; padding: 6px 4px 2px; font-size: 12px; color: var(--grigio); }
+        li.rsTesta div:first-child { flex: 1; }
+        li.rsTesta .rsNum { font-size: 12px; }
 
         .fzRiga { display: flex; align-items: center; gap: 8px; }
         .fzRiga span { width: 92px; font-weight: 600; flex: none; }
@@ -146,16 +156,16 @@
 
 <!-- Il ?v= deve essere UGUALE a VERSIONE in sw.js e va aumentato a ogni
      modifica di un file: e' cosi' che i telefoni scaricano la versione nuova. -->
-    <script src="config.js?v=3.13.0"></script>
-    <script src="store.js?v=3.13.0"></script>
-    <script src="cloud.js?v=3.13.0"></script>
-    <script src="sync.js?v=3.13.0"></script>
-    <script src="app.js?v=3.13.0"></script>
-    <script src="incontri.js?v=3.13.0"></script>
-    <script src="formazione.js?v=3.13.0"></script>
-    <script src="gioco.js?v=3.13.0"></script>
-    <script src="live.js?v=3.13.0"></script>
-    <script src="rosa.js?v=3.13.0"></script>
-    <script src="atleti.js?v=3.13.0"></script>
+    <script src="config.js?v=3.13.1"></script>
+    <script src="store.js?v=3.13.1"></script>
+    <script src="cloud.js?v=3.13.1"></script>
+    <script src="sync.js?v=3.13.1"></script>
+    <script src="app.js?v=3.13.1"></script>
+    <script src="incontri.js?v=3.13.1"></script>
+    <script src="formazione.js?v=3.13.1"></script>
+    <script src="gioco.js?v=3.13.1"></script>
+    <script src="live.js?v=3.13.1"></script>
+    <script src="rosa.js?v=3.13.1"></script>
+    <script src="atleti.js?v=3.13.1"></script>
 </body>
 </html>
