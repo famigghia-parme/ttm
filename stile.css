@@ -27,7 +27,8 @@ nav { position: fixed; bottom: 0; left: 0; right: 0; display: flex; background: 
       border-top: 1px solid var(--bordo); padding-bottom: env(safe-area-inset-bottom); z-index: 3; }
 nav[hidden] { display: none; }   /* display:flex sopra vince sull'attributo hidden */
 nav button { flex: 1; min-width: 0; border: 0; border-top: 3px solid transparent; background: none;
-             padding: 6px 2px 8px; font-size: 11px; color: var(--grigio); font-family: inherit; }
+             padding: 6px 0 8px; font-size: 10.5px; color: var(--grigio); font-family: inherit;
+             white-space: nowrap; overflow: hidden; }   /* 7 voci: "Classifica" in grassetto deve starci a 360 px */
 nav button span { display: block; font-size: 19px; line-height: 1.25; }
 /* La voce attiva NON si distingue dal colore del testo (verde scuro e nero si
    confondono): ha la barra sopra, lo sfondo chiaro e il grassetto. */
@@ -51,6 +52,11 @@ select, input, button.pieno { width: 100%; font-size: 16px; padding: 10px; margi
                               border: 1px solid var(--bordo); border-radius: 8px; background: #fff; }
 button.pieno { background: var(--verde); color: #fff; border: 0; font-weight: 600; }
 button.chiaro { background: #eee; color: #333; }
+/* un collegamento con l'aspetto di un pulsante (Referto PDF: apre o scarica un file) */
+a.pieno { display: block; box-sizing: border-box; width: 100%; font-size: 16px; padding: 10px; margin: 4px 0;
+          border-radius: 8px; text-align: center; text-decoration: none; font-weight: 600;
+          background: var(--verde); color: #fff; }
+a.pieno.chiaro { background: #eee; color: #333; }
 button:disabled { opacity: .5; }
 form { border: 1px solid var(--bordo); border-radius: 10px; padding: 10px; margin: 8px 0; background: #f7f7f7; }
 .riga { display: flex; gap: 8px; }
@@ -199,3 +205,23 @@ details.gr.prossimi { border-color: var(--verde); border-width: 2px; margin-bott
 
 /* Banda gialla: cose da sistemare (doppio da dichiarare, squadra senza atleti) */
 .avviso { background: #fff3cd; border: 1px solid #e0c060; border-radius: 8px; padding: 8px 10px; margin: 8px 0; font-size: 14px; color: #5a4500; }
+
+/* ---------- classifica: una riga per squadra, colonne allineate ---------- */
+li.clRiga { display: grid; grid-template-columns: 18px minmax(0, 1fr) 28px 18px 18px 18px 18px 50px;
+            gap: 3px; align-items: center; padding: 9px 2px; border-bottom: 1px solid var(--bordo);
+            list-style: none; text-align: center; font-variant-numeric: tabular-nums; white-space: nowrap; }
+li.clRiga:last-child { border-bottom: 0; }
+li.clRiga > b { font-size: 17px; }
+li.clRiga .clSq { text-align: left; min-width: 0; display: flex; flex-direction: column; }
+li.clRiga .clSq .nmSq { display: flex; min-width: 0; font-weight: 400; white-space: nowrap; }
+li.clRiga .clSq small { color: var(--grigio); font-size: 11px; }
+li.clTesta { font-size: 12px; color: var(--grigio); padding: 6px 2px 2px; }
+li.clTesta span:nth-child(2) { text-align: left; }
+/* la nostra squadra: fascia a sinistra, sfondo e nome in grassetto */
+li.clRiga.nostra { background: #e8f5e9; border-left: 6px solid var(--verde); padding-left: 4px; }
+li.clRiga.nostra .clSq .nmSq { font-weight: 700; }
+
+/* ---------- referto PDF creato dal telefono: riquadro "pronto" ---------- */
+.pdfPronto { border: 2px solid var(--verde); border-radius: 8px; padding: 10px; margin: 4px 0 8px; background: #fff; }
+.pdfPronto > small { display: block; color: var(--grigio); overflow-wrap: anywhere; }
+.pdfPronto > b + small { display: inline; }

@@ -2,7 +2,8 @@
 // Elenco incontri della stagione e scheda dell'incontro, tutto dai dati
 // locali: funziona anche offline. Dalla scheda si aprono la Formazione
 // (formazione.js), i Punti (live.js) e i Dati del referto (referto.js),
-// che disegnano qui dentro, e si scarica il punto per punto per la gara.
+// che disegnano qui dentro, si scarica il punto per punto per la gara e si
+// crea il referto in PDF (pdf.js).
 //
 // Due sezioni del menu usano questo file (stessa struttura nella PWA in
 // rete locale, wwwroot/incontri.js):
@@ -55,6 +56,7 @@ async function datiIncontri() {
 
 async function inElenco() {
     inAperto = null;
+    pdfLascia();                    // il referto creato vale per la scheda da cui si esce
     const c = $('#inCorpo');
     if (!c) return;
     const punti = inModo === 'punti';      // sezione Punti: solo le gare da giocare
@@ -179,6 +181,10 @@ async function inScheda(uid) {
         <button class="pieno chiaro" id="inScarica">${scaricato ? '📥 Scaricato — aggiorna' : '📥 Scarica per la gara'}</button>
         <div class="lvInfo">${scaricato ? 'Ultimo scarico: ' + new Date(scaricato).toLocaleString('it-IT') : 'Da fare prima di partire, con la rete: poi funziona anche senza.'}</div>`}
       <button class="pieno chiaro" id="inReferto">📋 Dati del referto</button>
+      ${Pdf.nomeModello(x.c.tipo, x.c.formula)
+            ? `<button class="pieno chiaro" id="inPdf">📄 Referto PDF</button>
+               <div id="inPdfBox"><div class="lvInfo">${esc(PDF_COSA)}</div></div>`
+            : `<div class="lvInfo">${esc(PDF_SENZA_MODELLO)}</div>`}
       <div id="msg"></div>
       <h4>Partite</h4>${righePartite.length ? '<ul>' + righePartite.join('') + '</ul>' : '<p class="vuoto">Partite non ancora create</p>'}
       <h4>Formazioni</h4>${squadra(x.casa, true)}${squadra(x.ospite, false)}
@@ -191,6 +197,10 @@ async function inScheda(uid) {
     if (bf) bf.onclick = () => fzApri(uid);
     // Anche a incontro terminato: ora di fine e provvedimenti si scrivono dopo
     $('#inReferto').onclick = () => rfApri(uid);
+    // Referto PDF (pdf.js): lo crea il telefono, anche senza rete. Se e'
+    // gia' stato creato per questo incontro, il riquadro resta.
+    const bpdf = $('#inPdf');
+    if (bpdf) { bpdf.onclick = () => pdfCrea(uid); pdfMostra(uid); }
     const b = $('#inScarica');
     if (b) b.onclick = async () => {
         b.disabled = true; msg('Scarico in corso…', true);

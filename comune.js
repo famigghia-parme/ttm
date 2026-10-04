@@ -6,7 +6,7 @@
 //
 // Qui sta tutto cio' che l'utente vede allo stesso modo nei due casi:
 // il menu (Home e barra in basso), i nomi delle sezioni, gli avvisi, gli
-// elenchi raggruppati, i nomi dei ruoli della formazione. Cio' che cambia
+// elenchi raggruppati, i nomi dei ruoli della formazione, la classifica. Cio' che cambia
 // (da dove arrivano i dati) sta negli altri file: nel cloud si legge il
 // database del telefono, in rete locale si chiede al PC.
 // Va caricato PRIMA di tutti gli altri script dell'app.
@@ -66,6 +66,7 @@ const SEZIONI = [
     { v: 'incontri', nome: 'Incontri', icona: '🗓️', cosa: 'Calendario, formazione, risultati' },
     { v: 'rosa',     nome: 'Rosa',     icona: '👥', cosa: 'Chi può giocare in ogni squadra' },
     { v: 'punti',    nome: 'Punti',    icona: '🏓', cosa: 'Segna il punteggio di una gara' },
+    { v: 'classifica', nome: 'Classifica', icona: '🏆', cosa: 'Punti e posizioni nei gironi' },
     { v: 'atleti',   nome: 'Atleti',   icona: '🪪', cosa: 'Cerca un tesserato, aggiungine uno' },
     { v: 'account',  nome: 'Account',  icona: '⚙️', cosa: 'Collegamento, ambiente, versione' }
 ];
@@ -141,7 +142,10 @@ function gruppiAperti(vista) {
     try { return JSON.parse(localStorage.getItem('ttm.gruppi.' + vista) || '[]'); } catch { return []; }
 }
 
-function htmlGruppi(vista, voci, htmlVoce, testa = '') {
+// apertoDiBase (facoltativa): g => true per i gruppi da mostrare aperti la
+// PRIMA volta, quando l'utente non ha ancora aperto o chiuso niente in
+// quella vista (Classifica: i gironi delle nostre squadre).
+function htmlGruppi(vista, voci, htmlVoce, testa = '', apertoDiBase = null) {
     const gruppi = new Map();
     for (const v of voci) {
         const k = [v.tipo || '', v.campionato || '', v.girone || ''].join('|');
@@ -154,10 +158,13 @@ function htmlGruppi(vista, voci, htmlVoce, testa = '') {
         || a.campionato.localeCompare(b.campionato, 'it')
         || a.girone.localeCompare(b.girone, 'it'));
     const aperti = gruppiAperti(vista);
+    let mai = false;
+    try { mai = localStorage.getItem('ttm.gruppi.' + vista) === null; } catch { }
     let h = '', fed = null;
     for (const g of ordinati) {
         if (g.tipo !== fed) { fed = g.tipo; h += `<h3 class="grFed">${esc(fed || 'Altro')}</h3>`; }
-        h += `<details class="gr" data-k="${esc(g.k)}"${ordinati.length === 1 || aperti.includes(g.k) ? ' open' : ''}>
+        const aperto = ordinati.length === 1 || aperti.includes(g.k) || (mai && !!apertoDiBase?.(g));
+        h += `<details class="gr" data-k="${esc(g.k)}"${aperto ? ' open' : ''}>
           <summary><b>${esc(g.campionato || 'Senza campionato')}</b>${g.girone ? ' · girone ' + esc(g.girone) : ''}<span>${g.voci.length}</span></summary>
           <ul>${testa}${g.voci.map(htmlVoce).join('')}</ul></details>`;
     }
@@ -198,10 +205,41 @@ function agganciaGruppi(vista, contenitore) {
             try { localStorage.setItem('ttm.prossimiChiusi', d.open ? '0' : '1'); } catch { }
             return;
         }
+        // Si parte da quelli ricordati e si aggiorna con TUTTI i gruppi sullo
+        // schermo (non solo quello toccato): cosi' restano aperti anche quelli
+        // aperti "di base" e mai toccati.
         const aperti = new Set(gruppiAperti(vista));
-        if (d.open) aperti.add(d.dataset.k); else aperti.delete(d.dataset.k);
+        contenitore.querySelectorAll('details.gr').forEach(x => {
+            if (x.dataset.k === '*prossimi') return;
+            if (x.open) aperti.add(x.dataset.k); else aperti.delete(x.dataset.k);
+        });
         try { localStorage.setItem('ttm.gruppi.' + vista, JSON.stringify([...aperti])); } catch { }
     }));
+}
+
+// ---------------- classifica ----------------
+// Stesso disegno nelle due PWA; cambia solo da dove arrivano i numeri
+// (classifica.js: nel cloud li calcola il telefono, in rete locale il PC).
+// gruppi = [{ tipo, campionato, girone, righe: [{ posizione, squadra, nostra,
+//   punti, giocati, vinti, pari, persi, partiteVinte, partitePerse, sorteggio }] }]
+// Una riga per squadra: # · squadra · Pt · G V N P · partite vinte-perse.
+// La nostra squadra ha la fascia a sinistra e il nome in grassetto (non
+// solo il colore). "(sorteggio)" = parita' che nessun criterio risolve.
+function clHtml(gruppi) {
+    if (!gruppi.length) return '<p class="vuoto">Nessuna squadra in questa stagione</p>';
+    const voci = gruppi.flatMap(g => g.righe.map(r => ({ ...r, tipo: g.tipo, campionato: g.campionato, girone: g.girone })));
+    const nostri = new Set(gruppi.filter(g => g.righe.some(r => r.nostra))
+        .map(g => [g.tipo || '', g.campionato || '', g.girone || ''].join('|')));
+    const testa = `<li class="clRiga clTesta"><span>#</span><span>Squadra</span><span>Pt</span>
+        <span>G</span><span>V</span><span>N</span><span>P</span><span>Partite</span></li>`;
+    const riga = r => `<li class="clRiga${r.nostra ? ' nostra' : ''}">
+        <span>${r.posizione}</span>
+        <span class="clSq">${htmlNomeSquadra(r.squadra)}${r.sorteggio ? '<small>sorteggio</small>' : ''}</span>
+        <b>${r.punti}</b><span>${r.giocati}</span><span>${r.vinti}</span><span>${r.pari}</span><span>${r.persi}</span>
+        <span>${r.partiteVinte}-${r.partitePerse}</span></li>`;
+    return `<div class="lvInfo">Pt punti · G giocati · V vinti · N pari · P persi · Partite vinte-perse</div>
+      ${htmlGruppi('classifica', voci, riga, testa, g => nostri.has(g.k))}
+      ${voci.some(r => r.sorteggio) ? '<div class="lvInfo">"sorteggio" = squadre a pari merito su tutti i criteri del regolamento: decide il sorteggio.</div>' : ''}`;
 }
 
 // ---------------- punti: asciugamano e time-out ----------------
@@ -370,6 +408,13 @@ function rfDisegnaPagina(r, toccata, indietro, salva) {
     $('#rfSalva').onclick = salva;
     window.scrollTo(0, 0);
 }
+
+// ---------------- referto in PDF ----------------
+// Frasi uguali nelle due PWA, sotto il pulsante "Referto PDF" della scheda
+// dell'incontro. In rete locale il PDF lo crea il PC, via cloud il telefono
+// (pdf.js): stesso modulo ufficiale, stessi dati.
+const PDF_COSA = 'Il modulo ufficiale compilato con i dati di adesso: prima della gara intestazione e formazioni, dopo anche set e risultato.';
+const PDF_SENZA_MODELLO = 'Referto PDF: per la formula di questo campionato non c\'è ancora il modulo ufficiale.';
 
 // ---------------- formazione: tendine ----------------
 // Usate dalla Formazione di tutte e due le PWA. Un atleta = { id, nome }
