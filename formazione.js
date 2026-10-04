@@ -104,7 +104,9 @@ async function fzApri(uidIncontro, uidSquadra, daSync = false) {
             candidati, posti, staff, altri,
             doppio: inCasa ? [doppio?.atleta_casa1_uid || null, doppio?.atleta_casa2_uid || null]
                 : [doppio?.atleta_ospite1_uid || null, doppio?.atleta_ospite2_uid || null],
-            colore: (inCasa ? inc.colore_maglia_casa : inc.colore_maglia_ospite) || '',
+            // maglia non ancora scritta sull'incontro: si propone quella della
+            // scheda della squadra (OSquadra in pdf.js); si salva con "Salva"
+            colore: (inCasa ? OSquadra.magliaCasa(inc, sq) : OSquadra.magliaOspite(inc, sq)) || '',
             ora: fzOraCampo(inCasa ? inc.ora_presentazione_casa : inc.ora_presentazione_ospite)
         };
     };
@@ -282,6 +284,11 @@ async function fzSalva() {
                 if (vive.length) {
                     // stesso atleta: la riga resta com'e' (anche l'eventuale sostituzione)
                     if (vive[0].atleta_uid !== voluto) scritture.push({ t: 'formazioni', riga: { ...vive[0], ...cambio } });
+                    // ... ma se era rimasta SENZA tessera e ora il numero c'e'
+                    // (inserito dopo aver fatto la formazione) lo prende adesso.
+                    // (04/10) Prima restava vuota per sempre. Una tessera gia'
+                    // scritta, anche a mano dal PC, non si tocca.
+                    else if (!vive[0].tessera && tessera) scritture.push({ t: 'formazioni', riga: { ...vive[0], tessera } });
                     for (const r of vive.slice(1)) scritture.push({ t: 'formazioni', riga: { ...r, eliminato: true } });
                 } else if (sue.length) {
                     scritture.push({ t: 'formazioni', riga: { ...sue[0], ...cambio } });      // posto di nuovo occupato
@@ -309,6 +316,8 @@ async function fzSalva() {
                     tessera: st.id ? (tessere.get(st.id) || null) : null, eliminato: false };
                 if (vive.length) {
                     if (!stesso(vive[0])) scritture.push({ t: 'formazioni', riga: { ...vive[0], ...cambio } });
+                    // stessa persona rimasta senza tessera: la prende adesso (come sopra)
+                    else if (!vive[0].tessera && cambio.tessera) scritture.push({ t: 'formazioni', riga: { ...vive[0], tessera: cambio.tessera } });
                     for (const r of vive.slice(1)) scritture.push({ t: 'formazioni', riga: { ...r, eliminato: true } });
                 } else if (sue.length) {
                     scritture.push({ t: 'formazioni', riga: { ...sue[0], ...cambio } });

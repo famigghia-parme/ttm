@@ -159,7 +159,8 @@ async function inScheda(uid) {
     const squadra = (sq, casa) => {
         const f = formazioni.filter(r => r.squadra_uid === sq?.uid)
             .sort((a, b) => ORDINE_RUOLI.indexOf(a.ruolo) - ORDINE_RUOLI.indexOf(b.ruolo));
-        const colore = casa ? i.colore_maglia_casa : i.colore_maglia_ospite;
+        // maglia dell'incontro oppure, se manca, della scheda della squadra (OSquadra in pdf.js)
+        const colore = casa ? OSquadra.magliaCasa(i, sq) : OSquadra.magliaOspite(i, sq);
         const soc = casa ? x.socCasa : x.socOspite, cod = codiceSocieta(soc);
         return `<div class="rpSq"><b>${esc(sq?.nome)}</b>${colore ? ' · maglia ' + esc(colore) : ''}
               ${soc ? `<small>Società: ${esc(soc.nome)}${cod ? ' · codice ' + esc(cod) : ''}</small>` : ''}</div>` +
@@ -174,7 +175,7 @@ async function inScheda(uid) {
       <div class="lvTesta">${htmlNomeSquadra(x.casa?.nome)}
         <span class="lvTot">${pc ?? '-'} – ${po ?? '-'}<small class="lvEtic">partite</small></span>
         ${htmlNomeSquadra(x.ospite?.nome)}</div>
-      <div class="lvInfo">${esc([dataBreve(i.data_ora), x.c.nome, i.luogo].filter(Boolean).join(' · '))}</div>
+      <div class="lvInfo">${esc([dataBreve(i.data_ora), x.c.nome, OSquadra.luogo(i, x.casa)].filter(Boolean).join(' · '))}</div>
       ${x.terminato ? '' : `
         <button class="pieno" id="inPunti">🏓 Segna i punti</button>
         <button class="pieno" id="inFormazione">✏️ Formazione</button>
@@ -188,7 +189,7 @@ async function inScheda(uid) {
       <div id="msg"></div>
       <h4>Partite</h4>${righePartite.length ? '<ul>' + righePartite.join('') + '</ul>' : '<p class="vuoto">Partite non ancora create</p>'}
       <h4>Formazioni</h4>${squadra(x.casa, true)}${squadra(x.ospite, false)}
-      <h4>Dati del referto</h4>${rfHtmlRiepilogo(rfDaIncontro(i))}`;
+      <h4>Dati del referto</h4>${rfHtmlRiepilogo(rfDaIncontro(i, x.casa))}`;
 
     $('#inIndietro').onclick = inElenco;
     const bp = $('#inPunti');

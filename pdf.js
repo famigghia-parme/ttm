@@ -18,14 +18,50 @@
 // sua casella.
 // I modelli li tiene in cache il service worker (sw.js): si usano offline.
 
+// "Il dato dell'incontro oppure, se manca, quello della scheda della squadra".
+// Campo di gara, maglie, tavolo e palline stanno sulla SQUADRA (import
+// squadre / Modifica squadra sul PC) e l'import del calendario li copia
+// sugli incontri; un incontro creato a mano, o una squadra completata dopo,
+// ne restano senza. Chi mostra o stampa questi dati (scheda dell'incontro,
+// Formazione, Dati referto, referto PDF) passa da qui.
+// E' la stessa regola del PC: Incontro.LuogoOSquadra, TavoloOSquadra...
+// in Models.cs (stessi tagli: 200, 100, 100, 40 caratteri).
+// inc = riga dell'incontro, casa / ospite = righe delle due squadre.
+const OSquadra = {
+    pieno(s, max = Infinity) {
+        if (s == null || String(s).trim() === '') return null;
+        s = String(s).trim();
+        return s.length <= max ? s : s.slice(0, max);
+    },
+    luogo(inc, casa) { return this.pieno(inc.luogo) ?? this.pieno(casa?.campo_gara, 200); },
+    tavolo(inc, casa) { return this.pieno(inc.tavolo) ?? this.pieno(casa?.tavolo, 100); },
+    palline(inc, casa) { return this.pieno(inc.palline) ?? this.pieno(casa?.palline, 100); },
+    magliaCasa(inc, casa) { return this.pieno(inc.colore_maglia_casa) ?? this.pieno(casa?.colori, 40); },
+    magliaOspite(inc, ospite) { return this.pieno(inc.colore_maglia_ospite) ?? this.pieno(ospite?.colori, 40); }
+};
+
 const Pdf = {
     SEGNAPOSTO: '% TTM-SOVRAPPOSIZIONE',
 
-    // Numero come lo scrive il PC: al massimo 3 decimali, senza zeri in coda
+    // Numero come lo scrive il PC ("0.###" di .NET): al massimo 3 decimali,
+    // senza zeri in coda. ATTENZIONE all'arrotondamento: .NET prima porta il
+    // numero a 15 cifre significative, POI arrotonda a 3 decimali (il 5 va
+    // in su). toFixed(3) invece guarda il valore binario esatto: 267.3825,
+    // che in binario e' 267.38249999..., per il PC e' "267.383" e per
+    // toFixed "267.382". Qui si fa come il PC, cifra per cifra
+    // (test-pdf.js lo confronta con il C# su migliaia di numeri).
     n(v) {
-        let s = v.toFixed(3);
-        if (s.includes('.')) s = s.replace(/0+$/, '').replace(/\.$/, '');
-        return s;
+        let s = Math.abs(v).toPrecision(15);
+        if (s.includes('e')) s = Math.abs(v).toFixed(3);       // numeri piccolissimi o enormi: qui non capitano
+        let [intero, dec = ''] = s.split('.');
+        if (dec.length > 3) {
+            let cifre = intero + dec.slice(0, 3);
+            if (dec[3] >= '5') cifre = String(Number(cifre) + 1).padStart(cifre.length, '0');
+            intero = cifre.slice(0, -3) || '0';
+            dec = cifre.slice(-3);
+        }
+        dec = dec.replace(/0+$/, '');
+        return (v < 0 ? '-' : '') + (dec ? `${intero}.${dec}` : intero);
     },
 
     // ------------------------------------------------------------------
@@ -202,23 +238,72 @@ const Pdf = {
         return nome.replace(/[<>:"/\\|?*\u0000-\u001F]/g, ' ').replace(/\s+/g, ' ').trim() + '.pdf';
     },
 
-    // Parole con cui comincia un indirizzo
-    INIZIO_VIA: /^(via|viale|v\.le|vicolo|piazza|piazzale|p\.zza|p\.za|corso|c\.so|largo|strada|contrada|localita'?|loc\.)\b/i,
+    // Parole con cui comincia un indirizzo (seguite da uno spazio)
+    INIZIO_VIA: /^(viale|via|v\.le|vicolo|piazzale|piazza|p\.zza|p\.za|corso|c\.so|largo|strada|contrada|localita'?|loc\.)(?=\s)/i,
+    // Numero civico: "14", "14A", "14/B". Cinque cifre = CAP, non civico.
+    CIVICO: /^[0-9]+[A-Za-z]?(\/[0-9A-Za-z]+)?$/,
+    CAP: /^[0-9]{5}$/,
 
-    // Il campo di gara e' scritto in una riga sola, di solito "IMPIANTO, VIA,
-    // NUMERO, COMUNE". Il modulo lo vuole in tre posti. -> [impianto, via, comune]
+    // Il campo di gara e' scritto in una riga sola; il modulo lo vuole in tre
+    // posti. -> [impianto, via, comune] (l'impianto puo' essere vuoto).
+    // Forme riconosciute, come DividiLuogo sul PC (RefertoPdf.cs):
+    //   "IMPIANTO, VIA BELLINI, 14, COMUNE"    calendario FITET e "Dati referto" del PC
+    //   "Impianto Via Bellini, 14 Comune"      sito del CSI
+    //   "Impianto Via Bellini 14 Comune"       senza virgole
+    //   "Impianto, Comune" / "Impianto"        nessuna via
     dividiLuogo(luogo) {
+        const parole = t => t.split(/\s+/).filter(x => x.length > 0);
         const pezzi = String(luogo ?? '').split(',').map(p => p.trim()).filter(p => p.length > 0);
         if (!pezzi.length) return ['', '', ''];
-        const i = pezzi.findIndex(p => this.INIZIO_VIA.test(p));
+
+        // 1. un pezzo (fra due virgole) che COMINCIA con la parola "via"
+        let i = pezzi.findIndex(p => this.INIZIO_VIA.test(p));
+
+        // 2. altrimenti la parola "via" in mezzo a un pezzo: lo si spezza li'
+        for (let a = 0; a < pezzi.length && i < 0; a++)
+            for (let k = 1; k < pezzi[a].length; k++)
+                if (/\s/.test(pezzi[a][k - 1]) && this.INIZIO_VIA.test(pezzi[a].slice(k))) {
+                    const prima = pezzi[a].slice(0, k).trim(), dopo = pezzi[a].slice(k);
+                    pezzi.splice(a, 1, prima, dopo);
+                    i = a + 1;
+                    break;
+                }
+
+        // il CAP non va sul referto
+        const senzaCap = comune => comune.map(c => parole(c).filter(x => !this.CAP.test(x)).join(' ')).filter(c => c.length > 0).join(', ');
+
+        // 3. nessuna via: l'ultimo pezzo e' il comune, il resto l'impianto
         if (i < 0)
-            return pezzi.length === 1 ? [pezzi[0], '', ''] : [pezzi.slice(0, -1).join(', '), '', pezzi[pezzi.length - 1]];
-        let via = pezzi[i], j = i + 1;
-        if (j < pezzi.length && /^[0-9]/.test(pezzi[j])) via += ', ' + pezzi[j++];      // numero civico
-        via = via.replace(/^via\s+/i, '');             // "in Via" e' gia' stampato sul modulo
-        const comune = pezzi.slice(j).join(', ');
-        const impianto = pezzi.slice(0, i).join(', ') || comune;
-        return [impianto, via, comune];
+            return pezzi.length === 1 ? [pezzi[0], '', ''] : [pezzi.slice(0, -1).join(', '), '', senzaCap([pezzi[pezzi.length - 1]])];
+
+        const impianto = pezzi.slice(0, i).join(', ');
+        let via = pezzi[i];
+        const resto = pezzi.slice(i + 1), comune = [];
+
+        if (resto.length) {
+            // Dopo la via c'e' una virgola: se il pezzo seguente comincia con
+            // il numero civico, quello va con la via e il resto e' il comune.
+            const p = parole(resto[0]);
+            if (this.CIVICO.test(p[0]) && !this.CAP.test(p[0])) {
+                via += ', ' + p[0];
+                resto[0] = p.slice(1).join(' ');
+            }
+            comune.push(...resto);
+        } else {
+            // Tutto in un pezzo ("Via Bellini 14 Bergamo"): il civico e'
+            // l'ultimo numero che non segue subito la parola "via" (in "Via
+            // 4 Novembre" il 4 e' il nome); cio' che lo segue e' il comune.
+            const p = parole(via);
+            let t = -1;
+            p.forEach((x, n) => { if (this.CIVICO.test(x) && !this.CAP.test(x)) t = n; });
+            if (t >= 2) {
+                via = p.slice(0, t + 1).join(' ');
+                comune.push(p.slice(t + 1).join(' '));
+            }
+        }
+
+        // "in Via" e' gia' stampato sul modulo: non si ripete
+        return [impianto, via.replace(/^via\s+/i, ''), senzaCap(comune)];
     },
 
     // Nome sul modulo di un ruolo della formazione; assente = non va sul referto
@@ -254,15 +339,17 @@ const Pdf = {
         };
 
         // --- intestazione ---
-        const [impianto, via, comune] = this.dividiLuogo(inc.luogo);
+        // campo di gara, tavolo, palline e maglie: dell'incontro oppure, se
+        // mancano, della scheda della squadra (OSquadra, qui sopra)
+        const [impianto, via, comune] = this.dividiLuogo(OSquadra.luogo(inc, d.casa));
         metti('citta', comune);
         metti('data', inc.data_ora ? `${inc.data_ora.slice(8, 10)}/${inc.data_ora.slice(5, 7)}/${inc.data_ora.slice(0, 4)}` : null);
         metti('gara', nomeGara(false));
         metti('gara~', nomeGara(true));
-        metti('svoltosiA', impianto);
+        metti('svoltosiA', impianto.length > 0 ? impianto : comune);       // senza l'impianto: il comune
         metti('via', via);
-        metti('tavolo', inc.tavolo);
-        metti('palline', inc.palline);
+        metti('tavolo', OSquadra.tavolo(inc, d.casa));
+        metti('palline', OSquadra.palline(inc, d.casa));
         metti('squadraCasa', d.casa?.nome);
         metti('squadraOspite', d.ospite?.nome);
 
@@ -282,7 +369,7 @@ const Pdf = {
             const sue = d.formazioni.filter(r => r.squadra_uid === uidSquadra);
 
             metti(`f.${lato}.squadra`, squadra?.nome);
-            metti(`f.${lato}.maglia`, casa ? inc.colore_maglia_casa : inc.colore_maglia_ospite);
+            metti(`f.${lato}.maglia`, casa ? OSquadra.magliaCasa(inc, d.casa) : OSquadra.magliaOspite(inc, d.ospite));
             metti(`f.${lato}.ora`, ora(casa ? inc.ora_presentazione_casa : inc.ora_presentazione_ospite));
 
             for (const r of sue) {
@@ -290,7 +377,12 @@ const Pdf = {
                 if (!chiave) continue;
                 const a = atleta(r.atleta_uid);
                 metti(`f.${lato}.${chiave}.nome`, a ? nomeCompleto(a) : (r.nome_libero ?? ''));
-                metti(`f.${lato}.${chiave}.tessera`, r.tessera);
+                // La tessera della riga e' quella di QUANDO la formazione e'
+                // stata salvata: se e' vuota si prende quella di adesso, dal
+                // tesseramento con la societa' della squadra.
+                metti(`f.${lato}.${chiave}.tessera`,
+                    r.tessera != null && String(r.tessera).trim() !== '' ? r.tessera
+                        : r.atleta_uid ? d.tessera?.(uidSquadra, r.atleta_uid) : null);
             }
 
             // Coppia del doppio (riga "D" dei moduli Corbillon): dalla partita
@@ -504,7 +596,7 @@ const Pdf = {
 };
 
 // Per i test con Node (nel telefono module non esiste)
-if (typeof module !== 'undefined') module.exports = { Pdf };
+if (typeof module !== 'undefined') module.exports = { Pdf, OSquadra };
 
 // ==================================================================
 // Dalla scheda dell'incontro (incontri.js): pulsante "Referto PDF"

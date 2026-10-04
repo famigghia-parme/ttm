@@ -336,6 +336,7 @@ async function lvDisegna(forza) {
     const su = (id, f) => { const b = $(id); if (b) b.onclick = f; };
     su('#lvAnnulla', lvAnnulla);
     su('#lvInizia', lvSorteggio);
+    lvAgganciaApreDoppio();
     su('#lvRifai', lvRifaiSorteggio);
     su('#lvCambia', () => { lv.partita = null; lvRicorda(lv.uid, null); lvDisegna(true); });
     c.querySelectorAll('button[data-doppio]').forEach(b => b.onclick = () => lvDichiaraDoppio(b.dataset.doppio));
@@ -408,8 +409,9 @@ function lvHtmlSorteggio(s, g) {
         if (manca.length)
             h = `<div class="avviso">Tocca al doppio, ma la coppia non è ancora stata indicata per: <b>${manca.map(m => esc(m?.nome)).join(', ')}</b></div>` +
                 manca.map(m => `<button class="pieno" data-doppio="${esc(m?.uid)}">Inserisci il doppio di ${esc(m?.nome)}</button>`).join('') + h;
-        h += `<div class="lvDom">Apre la coppia di casa</div>${r('apC', '1', lvChi(s, p, true, true), true)}${r('apC', '0', lvChi(s, p, true, false))}
-          <div class="lvDom">Apre la coppia ospite</div>${r('apO', '1', lvChi(s, p, false, true), true)}${r('apO', '0', lvChi(s, p, false, false))}`;
+        // Chi comincia in ciascuna coppia: le domande ("Batte..." / "Riceve...")
+        // seguono la scelta di "Batte per primo" (comune.js)
+        h += lvHtmlApreDoppio(r, lvChi(s, p, true, true), lvChi(s, p, true, false), lvChi(s, p, false, true), lvChi(s, p, false, false));
     }
     return h + '<button class="pieno" id="lvInizia">Inizia partita</button>' +
         '<button class="pieno chiaro" id="lvCambia">↔ Cambia partita</button>';

@@ -16,9 +16,16 @@ let rfModificata = false;
 
 // Riga del database locale -> dati del referto nella forma di comune.js.
 // fzOraCampo / fzOraCloud ("20:30:00" <-> "20:30") stanno in formazione.js.
-function rfDaIncontro(i) {
+// casa = riga della squadra di casa. Il campo di gara e' sempre "dell'incontro
+// oppure della scheda della squadra" (OSquadra in pdf.js): qui si legge
+// soltanto. Tavolo e palline lo sono solo con conScheda (il riepilogo: e'
+// cio' che va sul PDF); nel modulo no, li' la scheda e' una PROPOSTA che si
+// salva con "Salva" (rfApri).
+function rfDaIncontro(i, casa = null, conScheda = true) {
     return {
-        luogo: i.luogo || '', tavolo: i.tavolo || '', palline: i.palline || '',
+        luogo: OSquadra.luogo(i, casa) || '',
+        tavolo: (conScheda ? OSquadra.tavolo(i, casa) : i.tavolo) || '',
+        palline: (conScheda ? OSquadra.palline(i, casa) : i.palline) || '',
         giudiceArbitro: i.giudice_arbitro || '', qualificaArbitro: i.qualifica_arbitro || '',
         defibrillatore: i.defibrillatore ?? null, operatoreDae: i.operatore_dae || '',
         oraInizio: fzOraCampo(i.ora_inizio), oraFine: fzOraCampo(i.ora_fine),
@@ -44,15 +51,22 @@ async function rfApri(uid, daSync = false) {
         leggi('squadre', inc.squadra_casa_uid), leggi('squadre', inc.squadra_ospite_uid), tutti('incontri')]);
     if (daSync && (rfModificata || rf?.uid !== uid)) return;
 
-    // Proposta per l'impianto: l'ultima gara in casa della stessa squadra che
-    // ha questi dati (come DatabaseService.GetDatiCampoPrecedentiAsync)
+    // Proposta per l'impianto: tavolo e palline della scheda della squadra di
+    // casa; cio' che li' manca, e defibrillatore e operatore, dall'ultima gara
+    // in casa della stessa squadra che ha questi dati (come sul PC: GET
+    // /api/incontri/{id}/referto e DatabaseService.GetDatiCampoPrecedentiAsync)
     const prec = tuttiInc
         .filter(x => x.squadra_casa_uid === inc.squadra_casa_uid && x.uid !== uid &&
             (x.tavolo || x.palline || x.operatore_dae || x.defibrillatore != null))
         .sort((a, b) => String(b.data_ora || '').localeCompare(String(a.data_ora || '')))[0];
 
-    const prima = rfDaIncontro(inc), d = { ...prima };
-    const proposto = rfProponi(d, prec && rfDaIncontro(prec));
+    const prima = rfDaIncontro(inc, casa, false), d = { ...prima };
+    const daGara = prec ? rfDaIncontro(prec) : {};
+    const proposto = rfProponi(d, {
+        ...daGara,
+        tavolo: OSquadra.tavolo({}, casa) || daGara.tavolo,
+        palline: OSquadra.palline({}, casa) || daGara.palline
+    });
     rf = { uid, casa: casa?.nome, ospite: ospite?.nome, prima, d, proposto };
     rfModificata = false;
     rfDisegnaPagina(rf, () => { rfModificata = true; msg(''); }, rfIndietro, rfSalva);

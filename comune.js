@@ -242,6 +242,41 @@ function clHtml(gruppi) {
       ${voci.some(r => r.sorteggio) ? '<div class="lvInfo">"sorteggio" = squadre a pari merito su tutti i criteri del regolamento: decide il sorteggio.</div>' : ''}`;
 }
 
+// ---------------- punti: sorteggio del doppio ----------------
+// Nel primo set una coppia batte e l'altra riceve; in ognuna si sceglie chi
+// dei due comincia. Quale coppia batte dipende da "Batte per primo", scelto
+// poco sopra nello stesso modulo: le due domande cambiano con quella scelta
+// (come nel Sorteggio del PC), cosi' non si deve ragionare su chi "apre".
+//   batte la casa   -> "Batte la coppia di casa"  / "Riceve la coppia ospite"
+//   batte l'ospite  -> "Riceve la coppia di casa" / "Batte la coppia ospite"
+const lvEticDoppio = casaBatte => ({
+    casa: casaBatte ? 'Batte la coppia di casa: chi batte per primo?' : 'Riceve la coppia di casa: chi riceve per primo?',
+    ospite: casaBatte ? 'Riceve la coppia ospite: chi riceve per primo?' : 'Batte la coppia ospite: chi batte per primo?'
+});
+
+// Le due domande del doppio in fondo al sorteggio. r = la funzione che
+// disegna un pallino di scelta (nome, valore, testo, scelto); c1, c2 e o1,
+// o2 = i nomi dei due di casa e dei due ospiti.
+function lvHtmlApreDoppio(r, c1, c2, o1, o2) {
+    const e = lvEticDoppio(true);          // "Batte per primo" parte dalla casa
+    return `<div class="lvDom" id="lvDomApC">${e.casa}</div>${r('apC', '1', c1, true)}${r('apC', '0', c2)}
+      <div class="lvDom" id="lvDomApO">${e.ospite}</div>${r('apO', '1', o1, true)}${r('apO', '0', o2)}`;
+}
+
+// Da chiamare dopo aver messo il sorteggio nella pagina: a ogni cambio di
+// "Batte per primo" riscrive le due domande.
+function lvAgganciaApreDoppio() {
+    const a = $('#lvDomApC'), b = $('#lvDomApO');
+    if (!a || !b) return;
+    const aggiorna = () => {
+        const e = lvEticDoppio(document.querySelector('input[name="serv"]:checked')?.value !== '0');
+        a.textContent = e.casa;
+        b.textContent = e.ospite;
+    };
+    document.querySelectorAll('input[name="serv"]').forEach(x => x.addEventListener('change', aggiorna));
+    aggiorna();
+}
+
 // ---------------- punti: asciugamano e time-out ----------------
 // Uguali nelle due PWA (e nel Live del PC: SetService.Asciugamano,
 // SetService.SecondiTimeout).
@@ -313,9 +348,10 @@ function avviaContoTimeout(fine, alTermine) {
 // Il campo di gara (luogo) e' del calendario: qui si legge soltanto.
 
 // Tavolo, palline, defibrillatore e operatore di solito non cambiano da una
-// gara in casa all'altra: nei campi VUOTI si propongono quelli dell'ultima
-// gara in casa (prec, stessa forma di d). Ritorna true se ha proposto
-// qualcosa: si salva comunque solo con "Salva".
+// gara in casa all'altra: nei campi VUOTI si propongono quelli della scheda
+// della squadra di casa (tavolo, palline) e dell'ultima gara in casa (prec,
+// stessa forma di d: chi chiama ci ha gia' messo l'una e l'altra). Ritorna
+// true se ha proposto qualcosa: si salva comunque solo con "Salva".
 function rfProponi(d, prec) {
     if (!prec) return false;
     let proposto = false;
@@ -332,7 +368,7 @@ function rfHtmlModulo(d, proposto) {
         `<label class="rfCampo"><span>${etic}</span><input type="time" id="${id}" value="${esc(val || '')}"></label>`;
     const dae = d.defibrillatore === true ? '1' : d.defibrillatore === false ? '0' : '';
     return `
-      ${proposto ? '<div class="avviso">Tavolo, palline e defibrillatore vuoti sono stati proposti dall\'ultima gara in casa di questa squadra: controllali prima di salvare.</div>' : ''}
+      ${proposto ? '<div class="avviso">Tavolo, palline e defibrillatore vuoti sono stati proposti dalla scheda della squadra di casa o dalla sua ultima gara in casa: controllali prima di salvare.</div>' : ''}
       <h4>Impianto</h4>
       <div class="rfFisso"><span>Campo di gara</span><b>${esc(d.luogo || 'non indicato')}</b><small>Si cambia dal PC, nel calendario</small></div>
       ${campo('rfTavolo', 'Tavolo (marca e modello)', d.tavolo, 100)}
