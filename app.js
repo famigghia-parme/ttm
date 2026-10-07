@@ -198,7 +198,7 @@ viste.account = {
         if (ba) ba.onclick = async () => {
             // Nulla si perde: dati e modifiche in attesa restano nell'ambiente lasciato.
             const n2 = await contaInAttesa();
-            if (!confirm(`Passare all'ambiente ${altro.toUpperCase()}?` +
+            if (!await conferma(`Passare all'ambiente ${altro.toUpperCase()}?` +
                 (n2 ? `\n${n2} modifiche di ${AMBIENTE.toUpperCase()} restano da inviare: partiranno al ritorno.` : ''))) return;
             cambiaAmbiente(altro);
         };
@@ -208,8 +208,8 @@ viste.account = {
 
 async function esci() {
     const n = await contaInAttesa();
-    if (n && !confirm(`Ci sono ${n} modifiche non ancora inviate: uscendo si PERDONO.\nUscire lo stesso?`)) return;
-    if (!n && !confirm('Uscire? I dati scaricati vengono cancellati da questo telefono.')) return;
+    if (n && !await conferma(`Ci sono ${n} modifiche non ancora inviate: uscendo si PERDONO.\nUscire lo stesso?`, 'Attenzione')) return;
+    if (!n && !await conferma('Uscire? I dati scaricati vengono cancellati da questo telefono.')) return;
     Cloud.logout();
     await svuotaDb();
     location.reload();

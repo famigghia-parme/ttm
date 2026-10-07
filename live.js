@@ -98,7 +98,7 @@ async function lvSenzaFormazione(uid) {
 async function lvApri(uid) {
     // Formazione non compilata: avviso e conferma (comune.js). Chi rinuncia
     // resta dov'era (elenco dei Punti o scheda dell'incontro).
-    if (!lvConfermaSenzaFormazione(uid, await lvSenzaFormazione(uid))) return;
+    if (!await lvConfermaSenzaFormazione(uid, await lvSenzaFormazione(uid))) return;
     lv = { uid, partita: lvRicordata(uid) };
     lvHtml = '';
     Sync.pausaMs = LV_PAUSA_SYNC_MS();
@@ -447,14 +447,35 @@ function lvDichiaraDoppio(uidSquadra) {
 const LV_CAMBIATO = 'Punteggio cambiato da un altro dispositivo: ricontrolla.';
 const lvOraReferto = () => new Date().toTimeString().slice(0, 5) + ':00';     // ore e minuti, come si scrive a mano
 
+// f(s, g, chiedi): `chiedi(testo, titolo)` e' la domanda di conferma da usare
+// QUI dentro al posto di conferma() (comune.js). La finestra dell'app non
+// ferma il programma come faceva quella del browser: mentre si decide la
+// sincronizzazione puo' portare un punto segnato da un altro telefono. Per
+// questo dopo il "Sì" non si prosegue con i dati letti prima: l'azione
+// RIPARTE da capo sui dati di adesso, e va avanti solo se il punteggio e'
+// ancora quello e la domanda sarebbe la stessa (stesso testo: dentro c'e'
+// cio' che si e' confermato). Altrimenti niente scritto e LV_CAMBIATO.
+// Quindi in f, prima di chiedi(), non si scrive nulla.
 async function lvAzione(f) {
     if (lvBusy || !lv) return;
     lvBusy = true;
     try {
-        const s = await lvSituazione();
-        const g = s && lvGioco(s);
-        if (!g || g.chiave !== lvVista) { await lvDisegna(true); msg(LV_CAMBIATO); return; }
-        await f(s, g);
+        let detto = null;                 // { chiave, testo }: la domanda a cui si e' risposto Sì
+        for (let giro = 0; giro < 2; giro++) {
+            const s = lv && await lvSituazione();
+            const g = s && lvGioco(s);
+            if (!lv) return;              // vista lasciata mentre la finestra era aperta
+            if (!g || g.chiave !== (detto ? detto.chiave : lvVista)) { await lvDisegna(true); msg(LV_CAMBIATO); return; }
+            let rifare = false, diversa = false;
+            const chiedi = async (testo, titolo) => {
+                if (detto) { diversa = detto.testo !== testo; return !diversa; }
+                if (await conferma(testo, titolo)) { detto = { chiave: g.chiave, testo }; rifare = true; }
+                return false;             // al primo giro ci si ferma comunque: si riparte
+            };
+            await f(s, g, chiedi);
+            if (diversa) { await lvDisegna(true); msg(LV_CAMBIATO); return; }
+            if (!rifare) return;
+        }
     } catch (e) {
         console.error(e);
         msg('Errore: ' + (e.message || e));
@@ -486,11 +507,11 @@ const lvRifaiSorteggio = () => lvAzione(async (s, g) => {
 
 // Time-out chiesto da un lato: si scrive l'ora (UTC) sulla partita e parte
 // il minuto. Uno solo per lato in ogni partita.
-const lvTimeout = casa => lvAzione(async (s, g) => {
+const lvTimeout = casa => lvAzione(async (s, g, chiedi) => {
     if (!g.sorteggio) return;
     const col = casa ? 'timeout_casa_il' : 'timeout_ospite_il';
     if (g.p[col]) { await lvDisegna(true); msg('Time-out già usato in questa partita.'); return; }
-    if (!confirm(`Time-out per ${lvLato(s, g.p, casa)}?\nUn minuto di sospensione: ce n'è uno solo per partita.`)) return;
+    if (!await chiedi(`Time-out per ${lvLato(s, g.p, casa)}?\nUn minuto di sospensione: ce n'è uno solo per partita.`)) return;
     await scriviLocale([{ t: 'partite', riga: { ...g.p, [col]: new Date().toISOString() } }]);
     await lvDisegna(true);
 });
@@ -525,14 +546,14 @@ const lvTimeoutFine = casa => lvAzione(async (s, g) => {
 });
 
 // Chiamato per errore: il time-out torna disponibile.
-const lvTimeoutAnnulla = casa => lvAzione(async (s, g) => {
+const lvTimeoutAnnulla = casa => lvAzione(async (s, g, chiedi) => {
     const col = casa ? 'timeout_casa_il' : 'timeout_ospite_il';
-    if (!g.p[col] || !confirm(`Annullare il time-out di ${lvLato(s, g.p, casa)}?\nTorna disponibile.`)) return;
+    if (!g.p[col] || !await chiedi(`Annullare il time-out di ${lvLato(s, g.p, casa)}?\nTorna disponibile.`)) return;
     await scriviLocale([{ t: 'partite', riga: { ...g.p, [col]: null } }]);
     await lvDisegna(true);
 });
 
-const lvPunto = casa => lvAzione(async (s, g) => {
+const lvPunto = casa => lvAzione(async (s, g, chiedi) => {
     if (!g.sorteggio) return;
     // Si segna un punto durante il time-out: si e' ripreso a giocare. La
     // fascia va via qui e il conto si ferma anche sugli altri dispositivi
@@ -547,7 +568,7 @@ const lvPunto = casa => lvAzione(async (s, g) => {
     const finePartita = fineSet && Gioco.isPartitaTerminata(svc, svo);
 
     // Dal telefono una partita chiusa non si riapre: meglio chiedere.
-    if (finePartita && !confirm(`${pc}-${po}: con questo punto ${lvLato(s, p, casa)} vince la partita ${casa ? svc : svo}-${casa ? svo : svc}.\nConfermi?`))
+    if (finePartita && !await chiedi(`${pc}-${po}: con questo punto ${lvLato(s, p, casa)} vince la partita ${casa ? svc : svo}-${casa ? svo : svc}.\nConfermi?`))
         return;
     navigator.vibrate?.(30);
 
@@ -603,18 +624,18 @@ const lvPunto = casa => lvAzione(async (s, g) => {
         evento = 'Set decisivo: uno dei due è a 5 punti.\nCAMBIO CAMPO (il servizio non cambia).';
     }
     await lvDisegna(true);
-    if (evento) alert(evento);
+    if (evento) await messaggio(evento);
 });
 
 // Toglie l'ultimo punto della partita. Nel set in corso si guarda il log
 // per sapere di chi era; a inizio set (0-0) si riapre il set precedente:
 // li' l'ultimo punto e' per forza di chi l'ha vinto.
-const lvAnnulla = () => lvAzione(async (s, g) => {
+const lvAnnulla = () => lvAzione(async (s, g, chiedi) => {
     const vuoto = g.pc + g.po === 0;
     const prec = g.sets.filter(x => x.completato).pop();
     if (vuoto && !prec) { msg('Nessun punto da annullare.'); return; }
     const set = vuoto ? prec : g.set;
-    if (!confirm(vuoto ? `Il set ${prec.numero} è finito ${prec.punti_casa}-${prec.punti_ospite}.\nAnnullare il suo ultimo punto e riaprirlo?`
+    if (!await chiedi(vuoto ? `Il set ${prec.numero} è finito ${prec.punti_casa}-${prec.punti_ospite}.\nAnnullare il suo ultimo punto e riaprirlo?`
         : 'Annullare l\'ultimo punto?')) return;
 
     // La riga di log di QUESTO punteggio (la piu' recente, se ce n'e' piu' d'una)

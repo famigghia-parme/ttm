@@ -58,6 +58,67 @@ function msg(t, ok = false) {
     if (ok || !visibile) avviso(t, ok);
 }
 
+// ---------------- finestre di domanda e di messaggio ----------------
+// Al posto di confirm() e alert() del browser, che in testa scrivono
+// l'indirizzo del sito ("famigghia-parme.github.io dice"): una finestra
+// dell'app, con un titolo che dice che cosa e' (07/10).
+//   conferma(testo, titolo)  -> domanda con "Sì" e "No"; ritorna true/false
+//   messaggio(testo, titolo) -> cosa da leggere, con "OK"
+// Titolo: "Conferma" per le domande normali, "Attenzione" (col triangolo:
+// non solo il colore) dove con il Sì si perde qualcosa, "Avviso" per i
+// messaggi. Il testo puo' andare a capo con \n; non e' HTML.
+// A differenza di quelle del browser NON fermano il programma: vanno
+// aspettate con `await` (chi le chiama e' una funzione async) e mentre sono
+// aperte il resto dell'app continua (sincronizzazione, orologi). Per questo
+// nei Punti dopo il Sì si rilegge la situazione (live.js: lvAzione).
+// Una alla volta: una seconda richiesta aspetta che si chiuda la prima.
+// Si chiude solo con i pulsanti (o Esc = "No"/"OK"): toccare fuori non fa
+// nulla, a una domanda si risponde.
+let _dlgCoda = Promise.resolve();
+function _dlgApri(testo, titolo, pulsanti) {
+    const apri = () => new Promise(fatto => {
+        const prima = document.activeElement;
+        const velo = document.createElement('div');
+        velo.className = 'dlgVelo';
+        velo.innerHTML =
+            `<div class="dlg${titolo === 'Attenzione' ? ' dlgAttenzione' : ''}" role="alertdialog" aria-modal="true"
+                  aria-labelledby="dlgTitolo" aria-describedby="dlgTesto" tabindex="-1">
+               <h3 id="dlgTitolo">${titolo === 'Attenzione' ? '⚠ ' : ''}${esc(titolo)}</h3>
+               <div id="dlgTesto" class="dlgTesto">${esc(testo)}</div>
+               <div class="dlgPulsanti">${pulsanti.map((b, i) =>
+                   `<button type="button" class="pieno${b.chiaro ? ' chiaro' : ''}" data-dlg="${i}">${esc(b.testo)}</button>`).join('')}</div>
+             </div>`;
+        const chiudi = valore => {
+            document.removeEventListener('keydown', tasto, true);
+            velo.remove();
+            prima?.focus?.();
+            fatto(valore);
+        };
+        // Esc = l'ultimo pulsante ("No" nelle domande, "OK" nei messaggi)
+        const tasto = e => {
+            if (e.key !== 'Escape') return;
+            e.preventDefault(); e.stopPropagation();
+            chiudi(pulsanti[pulsanti.length - 1].valore);
+        };
+        velo.onclick = e => {
+            const b = e.target.closest('button[data-dlg]');
+            if (b) chiudi(pulsanti[+b.dataset.dlg].valore);
+        };
+        document.addEventListener('keydown', tasto, true);
+        document.body.appendChild(velo);
+        // Il fuoco va alla finestra, non a un pulsante: un Invio rimasto
+        // sotto il dito non deve rispondere "Sì" al posto di chi legge.
+        velo.querySelector('.dlg').focus();
+    });
+    const p = _dlgCoda.then(apri);
+    _dlgCoda = p.catch(() => {});
+    return p;
+}
+const conferma = (testo, titolo = 'Conferma') =>
+    _dlgApri(testo, titolo, [{ testo: 'Sì', valore: true }, { testo: 'No', valore: false, chiaro: true }]);
+const messaggio = (testo, titolo = 'Avviso') =>
+    _dlgApri(testo, titolo, [{ testo: 'OK', valore: undefined }]);
+
 // ---------------- menu: le sezioni dell'app ----------------
 // UN solo elenco per la Home e per la barra in basso: stessi nomi, stesso
 // ordine, in rete locale e via cloud. Per aggiungere o rinominare una
@@ -436,13 +497,14 @@ function trDisegna(c, tornei) {
 // completare. Chi conferma non viene piu' interrogato su quell'incontro
 // finche' l'app resta aperta.
 // squadre = nomi delle squadre senza formazione (vuoto = tutto a posto).
-// Ritorna true se si possono aprire i Punti.
+// Ritorna (dopo la risposta: va aspettata con await) true se si possono
+// aprire i Punti.
 const lvSenzaFormazioneOk = new Set();
-function lvConfermaSenzaFormazione(incontro, squadre) {
+async function lvConfermaSenzaFormazione(incontro, squadre) {
     if (!squadre.length || lvSenzaFormazioneOk.has(String(incontro))) return true;
-    const ok = confirm(`Formazione non compilata: ${squadre.join(' e ')}.\n\n` +
+    const ok = await conferma(`Formazione non compilata: ${squadre.join(' e ')}.\n\n` +
         'La formazione si compila in Incontri: tocca l\'incontro, poi "Formazione".\n\n' +
-        'Segnare i punti lo stesso, senza formazione? (non consigliato)');
+        'Segnare i punti lo stesso, senza formazione? (non consigliato)', 'Attenzione');
     if (ok) lvSenzaFormazioneOk.add(String(incontro));
     return ok;
 }

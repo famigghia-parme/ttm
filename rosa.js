@@ -119,8 +119,8 @@ function rsDisegna() {
     <div id="msg"></div>
     <button class="pieno rsSalva" id="rsSalva">Salva rosa</button>`;
 
-    $('#rsIndietro').onclick = () => {
-        if (rsModificata && !confirm('Rosa modificata e non salvata. Uscire lo stesso?')) return;
+    $('#rsIndietro').onclick = async () => {
+        if (rsModificata && !await conferma('Rosa modificata e non salvata. Uscire lo stesso?', 'Attenzione')) return;
         rsElenco();
     };
     document.querySelectorAll('.tabs button[data-sx]').forEach(b => b.onclick = () => {
@@ -191,7 +191,7 @@ async function rsSalva() {
     const voluti = new Set(rs.atleti.filter(a => a.inRosa).map(a => a.uid));
     // Sotto il minimo per giocare: avviso, non blocco (come sul PC).
     if (voluti.size < rs.min &&
-        !confirm(`In rosa ci sono ${voluti.size} atleti: per giocare ne servono almeno ${rs.min}.\nSalvare comunque?`)) return;
+        !await conferma(`In rosa ci sono ${voluti.size} atleti: per giocare ne servono almeno ${rs.min}.\nSalvare comunque?`, 'Attenzione')) return;
     if (rs.max > 0 && voluti.size > rs.max) { msg(`Massimo ${rs.max} atleti in rosa.`); return; }
 
     // Tutte le righe, anche quelle eliminate: si riusano

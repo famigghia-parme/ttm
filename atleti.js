@@ -156,10 +156,10 @@ async function atSalva(e) {
     // Stesso nome in un'altra societa': quasi sempre e' la stessa persona, e
     // crearla di nuovo fa due atleti distinti. Il tesseramento di un atleta
     // che esiste gia' si aggiunge dal PC.
-    if (omonimi.length && !confirm(
+    if (omonimi.length && !await conferma(
         `Esiste già ${cognome} ${nome}: ${[...new Set(omonimi.map(r => r.s ? r.s.nome : 'senza tesseramento'))].join(', ')}.\n` +
         'Se è la stessa persona, il tesseramento per questa società va aggiunto dal PC: qui si creerebbe un doppione.\n\n' +
-        'È un\'altra persona con lo stesso nome? OK per crearla.')) return;
+        'È un\'altra persona con lo stesso nome? Sì per crearla.', 'Attenzione')) return;
 
     const atleta = { nome, cognome, codice_fiscale: null, sesso: +(f.sesso.value || 0), attivo: true, uid: nuovoUid() };
     const affiliazione = {

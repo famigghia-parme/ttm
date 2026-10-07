@@ -192,6 +192,22 @@ textarea { width: 100%; font: inherit; font-size: 16px; padding: 10px; margin: 4
 #avviso.ok { background: var(--verde); }
 #avviso[hidden] { display: none; }
 
+/* Finestre di domanda e di messaggio (comune.js: conferma, messaggio): al
+   posto di quelle del browser, che in testa scrivono l'indirizzo del sito.
+   Il velo copre tutto, barra in basso compresa: finche' non si risponde non
+   si tocca altro. */
+.dlgVelo { position: fixed; inset: 0; z-index: 20; background: rgba(0,0,0,.5); display: flex; align-items: center;
+           justify-content: center; padding: 16px; overscroll-behavior: contain; }
+.dlg { background: #fff; border-radius: 12px; width: 100%; max-width: 420px; max-height: 90vh; overflow: auto;
+       padding: 16px; box-shadow: 0 8px 30px rgba(0,0,0,.35); outline: none; }
+.dlg h3 { margin: 0 0 10px; font-size: 18px; color: var(--verde); }
+/* Attenzione: oltre al colore c'e' il triangolo nel titolo e la riga a sinistra */
+.dlg.dlgAttenzione { border-left: 6px solid #b45309; }
+.dlg.dlgAttenzione h3 { color: #8a3d00; }
+.dlgTesto { white-space: pre-line; overflow-wrap: anywhere; font-size: 16px; line-height: 1.4; color: #222; }
+.dlgPulsanti { display: flex; gap: 10px; margin-top: 14px; }
+.dlgPulsanti button.pieno { margin: 0; min-height: 48px; }
+
 /* Elenchi raggruppati (comune.js: htmlGruppi): federazione > campionato > girone */
 h3.grFed { margin: 16px 0 6px; padding: 4px 8px; background: var(--verde); color: #fff; border-radius: 6px; font-size: 14px; letter-spacing: .5px; }
 details.gr { border: 1px solid var(--bordo); border-radius: 8px; margin: 6px 0; background: #fff; }

@@ -198,8 +198,8 @@ function fzDisegna() {
     $('#fzAbc').onchange = e => { fz.abc = e.target.value; fzModificata = true; fzDisegna(); };
     c.querySelectorAll('.tabs button[data-sq]').forEach(b =>
         b.onclick = () => { fz.sel = b.dataset.sq; fzDisegna(); });
-    $('#fzIndietro').onclick = () => {
-        if (fzModificata && !confirm('Formazione modificata e non salvata. Uscire lo stesso?')) return;
+    $('#fzIndietro').onclick = async () => {
+        if (fzModificata && !await conferma('Formazione modificata e non salvata. Uscire lo stesso?', 'Attenzione')) return;
         const uid = fz.uid, ritorno = fzRitorno;
         fz = null; fzModificata = false; fzRitorno = null;
         if (ritorno) ritorno(); else inScheda(uid);
@@ -242,7 +242,7 @@ async function fzSalva() {
         if (mancanti.length && (sq.uid === fz.sel || iniziata))
             avvisi.push(`${sq.nome}: mancano ${mancanti.map(r => fzEtichetta(r, fz.abc === sq.uid)).join(', ')}`);
     }
-    if (avvisi.length && !confirm('Formazione incompleta.\n' + avvisi.join('\n') + '\nSalvare comunque?')) return;
+    if (avvisi.length && !await conferma('Formazione incompleta.\n' + avvisi.join('\n') + '\nSalvare comunque?', 'Attenzione')) return;
 
     $('#fzSalva').disabled = true;
     try {

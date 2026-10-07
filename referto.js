@@ -72,8 +72,8 @@ async function rfApri(uid, daSync = false) {
     rfDisegnaPagina(rf, () => { rfModificata = true; msg(''); }, rfIndietro, rfSalva);
 }
 
-function rfIndietro() {
-    if (rfModificata && !confirm('Dati del referto modificati e non salvati. Uscire lo stesso?')) return;
+async function rfIndietro() {
+    if (rfModificata && !await conferma('Dati del referto modificati e non salvati. Uscire lo stesso?', 'Attenzione')) return;
     const uid = rf.uid;
     rf = null; rfModificata = false;
     inScheda(uid);
