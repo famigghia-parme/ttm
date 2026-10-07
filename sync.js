@@ -11,6 +11,10 @@
 //    servono solo li'.
 
 const FOGLIE = new Set(['atleti_societa', 'atleti_squadre', 'formazioni']);
+// Tabelle aggiunte dopo le prime 12 (07/10: tornei). Se il cloud non le ha
+// ancora, o non ha ancora dato il permesso di leggerle (schema.sql /
+// rls.sql non rieseguiti), si saltano: il resto si sincronizza lo stesso.
+const FACOLTATIVE = new Set(['tornei']);
 const PAGINA = 1000;          // massimo di Supabase per richiesta
 const LOTTO = 200;            // righe per upsert
 const MARGINE_MS = 60000;
@@ -299,7 +303,40 @@ async function pull(avvisi) {
         ricevute += await pullTabella(t, '', 'pull.' + t);
     }
     ricevute += await pullLogPunti();
+    ricevute += await pullTornei();
     return ricevute;
+}
+
+// ----------------------------------------------------------------
+// TORNEI (07/10): calendario dei tornei, scritto dal PC; il telefono lo
+// legge soltanto. Sta tutto in UNA voce di 'meta' (l'elenco intero) e non
+// in un contenitore suo come le altre tabelle: per aggiungere un
+// contenitore bisognerebbe alzare la versione del database del telefono, e
+// una versione PRECEDENTE dell'app (il giorno che si torna indietro dopo un
+// bug) non riuscirebbe piu' ad aprirlo. Sono poche centinaia di righe.
+// Si scaricano solo le righe cambiate, come per le altre tabelle.
+// ----------------------------------------------------------------
+async function pullTornei() {
+    const segno = await metaLeggi('pull.tornei');
+    const r = await pullDa('tornei', '', segno, unisciTornei);
+    if (r.massimo) await metaScrivi('pull.tornei', r.massimo);
+    return r.totale;
+}
+
+// Ritorna quante righe sono davvero cambiate (le ultime tornano a ogni giro
+// per via del margine: uguali a prima, non contano).
+async function unisciTornei(t, righe) {
+    const elenco = await metaLeggi('tornei', []);
+    const per = new Map(elenco.map(x => [x.uid, x]));
+    let n = 0;
+    for (const riga of righe) {
+        const prima = per.get(riga.uid);
+        if (riga.eliminato) { if (per.delete(riga.uid)) n++; continue; }
+        if (!prima || prima.modificato_il !== riga.modificato_il) n++;
+        per.set(riga.uid, riga);
+    }
+    if (n) await metaScrivi('tornei', [...per.values()]);
+    return n;
 }
 
 // filtro: condizione PostgREST in piu' (es. set_uid=in.(...))
@@ -312,7 +349,8 @@ async function pullTabella(t, filtro, chiaveMeta) {
 
 // Righe con sincronizzato_il dopo `segno` (meno il margine). Ritorna quante
 // sono cambiate qui e il sincronizzato_il piu' alto visto (il nuovo segno).
-async function pullDa(t, filtro, segno) {
+// scrivi (facoltativa): chi mette via le righe; di norma unisci.
+async function pullDa(t, filtro, segno, scrivi = unisci) {
     const da = segno ? new Date(Date.parse(segno) - MARGINE_MS).toISOString() : '1970-01-01T00:00:00Z';
     let massimo = segno, offset = 0, totale = 0;
 
@@ -321,10 +359,12 @@ async function pullDa(t, filtro, segno) {
             `${t}?select=*&sincronizzato_il=gt.${encodeURIComponent(da)}` +
             (filtro ? '&' + filtro : '') +
             `&order=sincronizzato_il.asc,uid.asc&limit=${PAGINA}&offset=${offset}`);
+        if (!r.ok && FACOLTATIVE.has(t) && [401, 403, 404].includes(r.status))
+            return { totale, massimo: segno };
         if (!r.ok) throw new Error(`Lettura ${t} non riuscita (${descriviErrore(r)})`);
         const righe = r.json || [];
         if (righe.length) {
-            totale += await unisci(t, righe);
+            totale += await scrivi(t, righe);
             const ultimo = righe[righe.length - 1].sincronizzato_il;
             if (!massimo || Date.parse(ultimo) > Date.parse(massimo)) massimo = ultimo;
         }

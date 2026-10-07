@@ -67,8 +67,13 @@ const SEZIONI = [
     { v: 'rosa',     nome: 'Rosa',     icona: '👥', cosa: 'Chi può giocare in ogni squadra' },
     { v: 'punti',    nome: 'Punti',    icona: '🏓', cosa: 'Segna il punteggio di una gara' },
     { v: 'classifica', nome: 'Classifica', icona: '🏆', cosa: 'Punti e posizioni nei gironi' },
+    { v: 'tornei',   nome: 'Tornei',   icona: '🏅', cosa: 'Calendario dei tornei' },
     { v: 'atleti',   nome: 'Atleti',   icona: '🪪', cosa: 'Cerca un tesserato, aggiungine uno' },
-    { v: 'account',  nome: 'Account',  icona: '⚙️', cosa: 'Collegamento, ambiente, versione' }
+    // fuoriBarra (07/10): con i Tornei le voci sono 7 e nella barra in basso,
+    // insieme a Home, non ci stanno piu' (a 360 px "Classifica" veniva
+    // tagliata). Account, la meno usata, resta nella Home e si apre anche
+    // toccando lo stato del collegamento in alto a destra.
+    { v: 'account',  nome: 'Account',  icona: '⚙️', cosa: 'Collegamento, ambiente, versione', fuoriBarra: true }
 ];
 
 // Le viste si registrano qui: { html, init, esci (facoltativo), suDati (facoltativo) }
@@ -90,11 +95,20 @@ function mostra(nome) {
     viste[nome].init?.();
 }
 
-// Barra in basso: Home + le sezioni. Da chiamare una volta all'avvio.
+// Barra in basso: Home + le sezioni (tranne quelle fuoriBarra). Da chiamare
+// una volta all'avvio.
 function disegnaNav() {
     const voce = s => `<button data-v="${s.v}"><span>${s.icona}</span>${esc(s.nome)}</button>`;
-    $('#nav').innerHTML = voce({ v: 'home', nome: 'Home', icona: '🏠' }) + SEZIONI.map(voce).join('');
+    $('#nav').innerHTML = voce({ v: 'home', nome: 'Home', icona: '🏠' }) + SEZIONI.filter(s => !s.fuoriBarra).map(voce).join('');
     document.querySelectorAll('#nav button').forEach(b => b.onclick = () => mostra(b.dataset.v));
+    // Lo stato del collegamento in alto a destra porta all'Account (solo a
+    // menu visibile: prima dell'accesso non c'e' nessun account da mostrare)
+    const stato = $('#stato');
+    if (stato) {
+        stato.style.cursor = 'pointer';
+        stato.title = 'Apri Account';
+        stato.onclick = () => { if (!$('#nav').hidden) mostra('account'); };
+    }
 }
 
 // Home: un pulsante grande per sezione. Sotto, una riga di informazioni che
@@ -171,21 +185,32 @@ function htmlGruppi(vista, voci, htmlVoce, testa = '', apertoDiBase = null) {
     return h;
 }
 
-// "Prossimi": gli incontri delle NOSTRE squadre nel prossimo giorno di gara
-// (oggi compreso), tutti insieme in un gruppo richiudibile come quelli dei
-// gironi. voci = incontri non terminati con { nostro, quando } dove quando
-// e' la data-ora (ISO locale) o null. Ritorna { giorno: 'sab 10/10', voci }
-// in ordine di ora, oppure null se non c'e' nessuna gara in arrivo.
-function prossimoGiorno(voci) {
+// "Prossimi": per CIASCUNA delle nostre squadre il suo prossimo incontro da
+// giocare (oggi compreso), tutti insieme in un gruppo richiudibile come
+// quelli dei gironi. Fino alla 3.15.1 erano le gare del solo prossimo giorno
+// di gara: una nostra squadra che giocava qualche giorno dopo non compariva.
+// voci = incontri non terminati con { nostro, quando, nostre } dove quando
+// e' la data-ora (ISO locale) o null, e nostre e' l'elenco delle nostre
+// squadre che giocano quell'incontro (uid o numero: di solito una, due se
+// si incontrano fra loro; quella gara vale per tutte e due ma compare una
+// volta sola). Ritorna { giorno, voci } in ordine di data, oppure null se
+// non c'e' nessuna gara in arrivo. giorno = 'sab 10/10', oppure
+// 'sab 10/10 – dom 18/10' se le gare cadono in giorni diversi.
+function prossimiNostri(voci) {
     const oggi = new Date(); oggi.setHours(0, 0, 0, 0);
     const futuri = voci.filter(v => v.nostro && v.quando && new Date(v.quando) >= oggi)
         .sort((a, b) => new Date(a.quando) - new Date(b.quando));
-    if (!futuri.length) return null;
-    const giorno = new Date(futuri[0].quando).toDateString();
-    return {
-        giorno: new Date(futuri[0].quando).toLocaleDateString('it-IT', { weekday: 'short', day: '2-digit', month: '2-digit' }),
-        voci: futuri.filter(v => new Date(v.quando).toDateString() === giorno)
-    };
+    const fatte = new Set(), scelti = [];        // squadre che hanno gia' la loro gara
+    for (const v of futuri) {
+        const nuove = (v.nostre || []).filter(k => !fatte.has(String(k)));
+        if (!nuove.length) continue;
+        nuove.forEach(k => fatte.add(String(k)));
+        scelti.push(v);
+    }
+    if (!scelti.length) return null;
+    const giorno = v => new Date(v.quando).toLocaleDateString('it-IT', { weekday: 'short', day: '2-digit', month: '2-digit' });
+    const primo = giorno(scelti[0]), ultimo = giorno(scelti[scelti.length - 1]);
+    return { giorno: primo === ultimo ? primo : `${primo} – ${ultimo}`, voci: scelti };
 }
 
 // Aperto finche' l'utente non lo chiude (al contrario dei gironi).
@@ -242,6 +267,134 @@ function clHtml(gruppi) {
       ${voci.some(r => r.sorteggio) ? '<div class="lvInfo">"sorteggio" = squadre a pari merito su tutti i criteri del regolamento: decide il sorteggio.</div>' : ''}`;
 }
 
+// ---------------- tornei ----------------
+// Calendario dei tornei individuali, stesso disegno nelle due PWA; cambia
+// solo da dove arriva l'elenco (via cloud i dati scaricati sul telefono, in
+// rete locale api/tornei del PC). Un torneo:
+//   { id, federazione, regione, tipo, nome, localita,
+//     inizio: 'AAAA-MM-GG', fine: 'AAAA-MM-GG' o null,
+//     gare: ['...'], url, programma }
+// Elenco da oggi in poi (un torneo di piu' giorni resta finche' non
+// finisce), raggruppato per mese; un tocco sul torneo apre le gare e i
+// collegamenti al sito della federazione.
+
+const trGiorno = iso => new Date(iso + 'T00:00:00');        // mezzanotte LOCALE (new Date('AAAA-MM-GG') sarebbe UTC)
+const trOggi = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; };
+const trUltimo = t => trGiorno(t.fine && t.fine > t.inizio ? t.fine : t.inizio);
+
+// 'sab 10/10', oppure 'sab 10 – dom 11/10' (stesso mese), oppure 'sab 31/10 – dom 01/11'
+function trQuando(t) {
+    const g = (d, conMese) => d.toLocaleDateString('it-IT', conMese
+        ? { weekday: 'short', day: '2-digit', month: '2-digit' } : { weekday: 'short', day: '2-digit' });
+    const a = trGiorno(t.inizio), b = trUltimo(t);
+    if (b <= a) return g(a, true);
+    return `${g(a, a.getMonth() !== b.getMonth())} – ${g(b, true)}`;
+}
+
+// Solo indirizzi web: arrivano da pagine scaricate, non si fidano.
+const trIndirizzo = u => /^https?:\/\//i.test(u || '') ? u : '';
+
+// Filtro scelto. La regione si ricorda sul telefono; "Passati" no: chi
+// riapre l'app giorni dopo deve trovare i tornei in arrivo.
+const trStato = { regione: '', passati: false };
+try { trStato.regione = localStorage.getItem('ttm.tornei.regione') || ''; } catch { }
+
+// Tornei da mostrare, in ordine di data (i passati, se chiesti, dal piu' recente)
+function trVisibili(tornei, stato = trStato, oggi = trOggi()) {
+    const validi = tornei.filter(t => /^\d{4}-\d{2}-\d{2}$/.test(t.inizio || ''));
+    const regione = validi.some(t => t.regione === stato.regione) ? stato.regione : '';   // regione sparita dall'elenco = tutte
+    const suoi = validi.filter(t => !regione || t.regione === regione);
+    const perData = (a, b) => a.inizio.localeCompare(b.inizio) || String(a.nome || '').localeCompare(String(b.nome || ''), 'it');
+    return {
+        regione,
+        prossimi: suoi.filter(t => trUltimo(t) >= oggi).sort(perData),
+        passati: suoi.filter(t => trUltimo(t) < oggi).sort((a, b) => perData(b, a))
+    };
+}
+
+function trHtmlTorneo(t, piuFederazioni, oggi) {
+    const inCorso = trGiorno(t.inizio) <= oggi && trUltimo(t) >= oggi;
+    const nome = String(t.nome || '').trim() || ('Torneo ' + (t.tipo || '')).trim();
+    const dove = [t.localita, t.regione, t.tipo, piuFederazioni ? t.federazione : null].filter(Boolean).join(' · ');
+    const url = trIndirizzo(t.url), programma = trIndirizzo(t.programma);
+    const gare = (t.gare || []).filter(Boolean);
+    return `<li class="atleta trVoce">
+      <details class="trTorneo">
+        <summary><b>${esc(trQuando(t))}</b>${inCorso ? ' <i class="trOggi">oggi</i>' : ''} ${esc(nome)}<br><small>${esc(dove)}</small></summary>
+        <div class="trDett">
+          ${gare.length ? '<ul class="trGare">' + gare.map(g => `<li>${esc(g)}</li>`).join('') + '</ul>'
+            : '<p class="trNo">Gare non indicate sul sito.</p>'}
+          ${url || programma ? `<p class="trLink">
+            ${url ? `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">Scheda sul sito ${esc(t.federazione || '')}</a>` : ''}
+            ${programma ? `<a href="${esc(programma)}" target="_blank" rel="noopener noreferrer">Programma (PDF)</a>` : ''}</p>` : ''}
+        </div>
+      </details></li>`;
+}
+
+// Un gruppo richiudibile per mese (come i gironi negli Incontri). La prima
+// volta e' aperto il primo, poi si ricordano quelli aperti.
+function trHtmlMesi(lista, piuFederazioni, oggi) {
+    const mesi = new Map();
+    for (const t of lista) {
+        const k = t.inizio.slice(0, 7);
+        if (!mesi.has(k)) mesi.set(k, []);
+        mesi.get(k).push(t);
+    }
+    const aperti = gruppiAperti('tornei');
+    let mai = false;
+    try { mai = localStorage.getItem('ttm.gruppi.tornei') === null; } catch { }
+    let primo = true, h = '';
+    for (const [k, suoi] of mesi) {
+        const titolo = trGiorno(k + '-01').toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
+        const aperto = mesi.size === 1 || aperti.includes(k) || (mai && primo);
+        primo = false;
+        h += `<details class="gr" data-k="${esc(k)}"${aperto ? ' open' : ''}>
+          <summary><b>${esc(titolo.charAt(0).toUpperCase() + titolo.slice(1))}</b><span>${suoi.length}</span></summary>
+          <ul>${suoi.map(t => trHtmlTorneo(t, piuFederazioni, oggi)).join('')}</ul></details>`;
+    }
+    return h;
+}
+
+function trHtml(tornei, stato = trStato, oggi = trOggi()) {
+    if (!tornei.length)
+        return '<p class="vuoto">Nessun torneo. Si scaricano dal PC: sezione Tornei, "Scarica dal sito FITET".</p>';
+    const regioni = [...new Set(tornei.map(t => t.regione).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'it'));
+    const piuFederazioni = new Set(tornei.map(t => t.federazione || '')).size > 1;
+    const v = trVisibili(tornei, stato, oggi);
+    const lista = stato.passati ? v.passati : v.prossimi;
+    return `${regioni.length > 1 ? `<select id="trRegione"><option value="">Tutte le regioni</option>
+          ${regioni.map(r => `<option value="${esc(r)}"${r === v.regione ? ' selected' : ''}>${esc(r)}</option>`).join('')}</select>` : ''}
+      <div class="tabs">
+        <button id="trTabProssimi"${stato.passati ? '' : ' class="att"'}>In arrivo (${v.prossimi.length})</button>
+        <button id="trTabPassati"${stato.passati ? ' class="att"' : ''}>Passati (${v.passati.length})</button>
+      </div>
+      ${lista.length ? trHtmlMesi(lista, piuFederazioni, oggi)
+        : `<p class="vuoto">${stato.passati ? 'Nessun torneo passato' : 'Nessun torneo in arrivo'}${v.regione ? ' in ' + esc(v.regione) : ''}.</p>`}`;
+}
+
+// Disegna la sezione dentro c e aggancia filtro e schede. Richiamata con
+// gli stessi tornei di prima (dati arrivati dal cloud ma senza novita' sui
+// tornei) non ridisegna: chi sta leggendo le gare non se le vede richiudere.
+function trDisegna(c, tornei) {
+    const firma = JSON.stringify(tornei);
+    if (c.dataset.firma === firma && c.firstChild) return;
+    c.dataset.firma = firma;
+    const ridisegna = () => {
+        c.innerHTML = trHtml(tornei);
+        agganciaGruppi('tornei', c);
+        const reg = c.querySelector('#trRegione');
+        if (reg) reg.onchange = () => {
+            trStato.regione = reg.value;
+            try { localStorage.setItem('ttm.tornei.regione', reg.value); } catch { }
+            ridisegna();
+        };
+        const tab = (id, passati) => { const b = c.querySelector(id); if (b) b.onclick = () => { trStato.passati = passati; ridisegna(); }; };
+        tab('#trTabProssimi', false);
+        tab('#trTabPassati', true);
+    };
+    ridisegna();
+}
+
 // ---------------- punti: sorteggio del doppio ----------------
 // Nel primo set una coppia batte e l'altra riceve; in ognuna si sceglie chi
 // dei due comincia. Quale coppia batte dipende da "Batte per primo", scelto
@@ -250,8 +403,8 @@ function clHtml(gruppi) {
 //   batte la casa   -> "Batte la coppia di casa"  / "Riceve la coppia ospite"
 //   batte l'ospite  -> "Riceve la coppia di casa" / "Batte la coppia ospite"
 const lvEticDoppio = casaBatte => ({
-    casa: casaBatte ? 'Batte la coppia di casa: chi batte per primo?' : 'Riceve la coppia di casa: chi riceve per primo?',
-    ospite: casaBatte ? 'Riceve la coppia ospite: chi riceve per primo?' : 'Batte la coppia ospite: chi batte per primo?'
+    casa: casaBatte ? 'Batte la coppia di casa: batte per primo' : 'Riceve la coppia di casa: riceve per primo',
+    ospite: casaBatte ? 'Riceve la coppia ospite: riceve per primo' : 'Batte la coppia ospite: batte per primo'
 });
 
 // Le due domande del doppio in fondo al sorteggio. r = la funzione che

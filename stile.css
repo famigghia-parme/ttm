@@ -225,3 +225,21 @@ li.clRiga.nostra .clSq .nmSq { font-weight: 700; }
 .pdfPronto { border: 2px solid var(--verde); border-radius: 8px; padding: 10px; margin: 4px 0 8px; background: #fff; }
 .pdfPronto > small { display: block; color: var(--grigio); overflow-wrap: anywhere; }
 .pdfPronto > b + small { display: inline; }
+
+/* ---------- tornei (07/10) ---------- */
+#trRegione { margin: 4px 0 8px; }
+li.trVoce { padding: 0; }
+details.trTorneo > summary { padding: 10px 4px 10px 22px; cursor: pointer; list-style: none; position: relative; }
+details.trTorneo > summary::-webkit-details-marker { display: none; }
+details.trTorneo > summary::before { content: "▸"; color: var(--grigio); position: absolute; left: 4px; top: 10px; }
+details.trTorneo[open] > summary::before { content: "▾"; }
+details.trTorneo > summary small { color: var(--grigio); }
+/* "oggi" e' scritto, non solo colorato */
+.trOggi { font-style: normal; font-size: 12px; font-weight: 700; background: var(--verde); color: #fff; border-radius: 8px; padding: 1px 7px; }
+.trDett { padding: 0 4px 10px 22px; }
+ul.trGare { margin: 0 0 8px; padding: 0 0 0 18px; list-style: disc; font-size: 14px; }
+ul.trGare li { padding: 2px 0; }
+.trNo { margin: 0 0 8px; color: var(--grigio); font-size: 14px; }
+.trLink { margin: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.trLink a { display: inline-block; padding: 9px 12px; border: 1px solid var(--verde); border-radius: 8px;
+            color: var(--verde); font-weight: 600; text-decoration: none; background: #fff; font-size: 14px; }

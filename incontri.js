@@ -47,7 +47,8 @@ async function datiIncontri() {
             socCasa: SOC.get(casa?.societa_uid), socOspite: SOC.get(ospite?.societa_uid),
             nostro: !!(casa?.nostra_squadra || ospite?.nostra_squadra),
             terminato: i.stato === 'Terminato',
-            quando: i.data_ora || null,       // per prossimoGiorno
+            quando: i.data_ora || null,       // per prossimiNostri
+            nostre: [casa, ospite].filter(s => s?.nostra_squadra).map(s => s.uid),
             // per htmlGruppi: federazione > campionato > girone
             tipo: c?.tipo, campionato: c?.nome, girone: casa?.girone || ospite?.girone || ''
         };
@@ -63,7 +64,7 @@ async function inElenco() {
     const passate = inPassate && !punti;
     let lista = await datiIncontri();
     // "Prossimi" guarda sempre e solo le nostre squadre, anche con "tutti" attivo
-    const prossimi = passate ? null : prossimoGiorno(lista.filter(x => !x.terminato));
+    const prossimi = passate ? null : prossimiNostri(lista.filter(x => !x.terminato));
     // Solo i nostri, se ne esiste almeno uno marcato (stessa regola del PC)
     if (!inTutti && lista.some(x => x.nostro)) lista = lista.filter(x => x.nostro);
 
@@ -88,7 +89,7 @@ async function inElenco() {
 
     // Tanti incontri: raggruppati per federazione > campionato > girone
     // (htmlGruppi in app.js). Sopra, nella scheda "Da giocare", il gruppo
-    // "Prossimi": tutte le nostre gare del prossimo giorno di gara.
+    // "Prossimi": la prossima gara di ciascuna delle nostre squadre.
 
     c.innerHTML = `
       ${punti ? '<div class="lvSceltaTit">Di quale incontro segni i punti?</div>' : ''}
