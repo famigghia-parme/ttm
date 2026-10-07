@@ -18,6 +18,8 @@ async function trDati() {
         inizio: String(r.data_inizio || '').slice(0, 10),
         fine: r.data_fine ? String(r.data_fine).slice(0, 10) : null,
         gare: String(r.gare || '').split('\n').map(g => g.trim()).filter(Boolean),
+        dettagli: r.dettagli || null,           // testo della lettera allegata dal PC
+        km: r.distanza_km ?? null,          // in linea d'aria dal nostro campo di gara (lo calcola il PC)
         url: r.url,
         programma: r.url_programma
     }));

@@ -276,7 +276,9 @@ function clHtml(gruppi) {
 //     gare: ['...'], url, programma }
 // Elenco da oggi in poi (un torneo di piu' giorni resta finche' non
 // finisce), raggruppato per mese; un tocco sul torneo apre le gare e i
-// collegamenti al sito della federazione.
+// collegamenti al sito della federazione. Accanto alla localita' i km in
+// linea d'aria dal nostro campo di gara (t.km: li calcola il PC), con il
+// filtro "entro ... km".
 
 const trGiorno = iso => new Date(iso + 'T00:00:00');        // mezzanotte LOCALE (new Date('AAAA-MM-GG') sarebbe UTC)
 const trOggi = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; };
@@ -294,19 +296,34 @@ function trQuando(t) {
 // Solo indirizzi web: arrivano da pagine scaricate, non si fidano.
 const trIndirizzo = u => /^https?:\/\//i.test(u || '') ? u : '';
 
-// Filtro scelto. La regione si ricorda sul telefono; "Passati" no: chi
-// riapre l'app giorni dopo deve trovare i tornei in arrivo.
-const trStato = { regione: '', passati: false };
-try { trStato.regione = localStorage.getItem('ttm.tornei.regione') || ''; } catch { }
+// Percorso in Google Maps fino alla localita' (strada e tempi veri: la
+// distanza scritta accanto al torneo e' in linea d'aria). Senza partenza:
+// Maps parte da dove si trova il telefono.
+const trMappa = localita => String(localita || '').trim()
+    ? 'https://www.google.com/maps/dir/?api=1&destination=' + encodeURIComponent(String(localita).trim() + ', Italia') : '';
+
+// Filtro "entro ... km" (0 = qualsiasi distanza)
+const TR_DISTANZE = [0, 50, 100, 200, 400];
+
+// Filtro scelto. Regione e distanza si ricordano sul telefono; "Passati"
+// no: chi riapre l'app giorni dopo deve trovare i tornei in arrivo.
+const trStato = { regione: '', km: 0, passati: false };
+try {
+    trStato.regione = localStorage.getItem('ttm.tornei.regione') || '';
+    trStato.km = TR_DISTANZE.includes(+localStorage.getItem('ttm.tornei.km')) ? +localStorage.getItem('ttm.tornei.km') : 0;
+} catch { }
 
 // Tornei da mostrare, in ordine di data (i passati, se chiesti, dal piu' recente)
 function trVisibili(tornei, stato = trStato, oggi = trOggi()) {
     const validi = tornei.filter(t => /^\d{4}-\d{2}-\d{2}$/.test(t.inizio || ''));
     const regione = validi.some(t => t.regione === stato.regione) ? stato.regione : '';   // regione sparita dall'elenco = tutte
-    const suoi = validi.filter(t => !regione || t.regione === regione);
+    // Entro i km scelti; un torneo senza distanza (localita' non riconosciuta
+    // dal PC) si vede sempre: non si puo' dire che sia lontano.
+    const km = validi.some(t => t.km != null) ? (stato.km || 0) : 0;
+    const suoi = validi.filter(t => (!regione || t.regione === regione) && (!km || t.km == null || t.km <= km));
     const perData = (a, b) => a.inizio.localeCompare(b.inizio) || String(a.nome || '').localeCompare(String(b.nome || ''), 'it');
     return {
-        regione,
+        regione, km,
         prossimi: suoi.filter(t => trUltimo(t) >= oggi).sort(perData),
         passati: suoi.filter(t => trUltimo(t) < oggi).sort((a, b) => perData(b, a))
     };
@@ -315,18 +332,26 @@ function trVisibili(tornei, stato = trStato, oggi = trOggi()) {
 function trHtmlTorneo(t, piuFederazioni, oggi) {
     const inCorso = trGiorno(t.inizio) <= oggi && trUltimo(t) >= oggi;
     const nome = String(t.nome || '').trim() || ('Torneo ' + (t.tipo || '')).trim();
-    const dove = [t.localita, t.regione, t.tipo, piuFederazioni ? t.federazione : null].filter(Boolean).join(' · ');
-    const url = trIndirizzo(t.url), programma = trIndirizzo(t.programma);
+    // La federazione si scrive solo se ce n'e' piu' d'una, e non due volte
+    // (per il CSI il tipo e' gia' "CSI Bergamo", il comitato che organizza)
+    const fed = piuFederazioni && !String(t.tipo || '').toUpperCase().includes(String(t.federazione || '').toUpperCase()) ? t.federazione : null;
+    const dove = [t.localita, t.km != null ? `≈ ${t.km} km` : null, t.regione, t.tipo, fed].filter(Boolean).join(' · ');
+    const url = trIndirizzo(t.url), programma = trIndirizzo(t.programma), mappa = trMappa(t.localita);
     const gare = (t.gare || []).filter(Boolean);
+    // Testo della lettera allegata dal PC (categorie, orari, iscrizioni,
+    // quote): cosi' com'e', con i suoi a capo
+    const lettera = String(t.dettagli || '').trim();
     return `<li class="atleta trVoce">
       <details class="trTorneo">
         <summary><b>${esc(trQuando(t))}</b>${inCorso ? ' <i class="trOggi">oggi</i>' : ''} ${esc(nome)}<br><small>${esc(dove)}</small></summary>
         <div class="trDett">
           ${gare.length ? '<ul class="trGare">' + gare.map(g => `<li>${esc(g)}</li>`).join('') + '</ul>'
-            : '<p class="trNo">Gare non indicate sul sito.</p>'}
-          ${url || programma ? `<p class="trLink">
+            : lettera ? '' : '<p class="trNo">Gare non indicate sul sito.</p>'}
+          ${lettera ? `<div class="trLettera">${esc(lettera)}</div>` : ''}
+          ${url || programma || mappa ? `<p class="trLink">
             ${url ? `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">Scheda sul sito ${esc(t.federazione || '')}</a>` : ''}
-            ${programma ? `<a href="${esc(programma)}" target="_blank" rel="noopener noreferrer">Programma (PDF)</a>` : ''}</p>` : ''}
+            ${programma ? `<a href="${esc(programma)}" target="_blank" rel="noopener noreferrer">Programma (PDF)</a>` : ''}
+            ${mappa ? `<a href="${esc(mappa)}" target="_blank" rel="noopener noreferrer">Indicazioni stradali</a>` : ''}</p>` : ''}
         </div>
       </details></li>`;
 }
@@ -357,19 +382,25 @@ function trHtmlMesi(lista, piuFederazioni, oggi) {
 
 function trHtml(tornei, stato = trStato, oggi = trOggi()) {
     if (!tornei.length)
-        return '<p class="vuoto">Nessun torneo. Si scaricano dal PC: sezione Tornei, "Scarica dal sito FITET".</p>';
+        return '<p class="vuoto">Nessun torneo. Si scaricano dal PC: sezione Tornei, "Scarica i tornei".</p>';
     const regioni = [...new Set(tornei.map(t => t.regione).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'it'));
     const piuFederazioni = new Set(tornei.map(t => t.federazione || '')).size > 1;
     const v = trVisibili(tornei, stato, oggi);
     const lista = stato.passati ? v.passati : v.prossimi;
-    return `${regioni.length > 1 ? `<select id="trRegione"><option value="">Tutte le regioni</option>
-          ${regioni.map(r => `<option value="${esc(r)}"${r === v.regione ? ' selected' : ''}>${esc(r)}</option>`).join('')}</select>` : ''}
+    // La tendina delle distanze c'e' solo se il PC le ha calcolate
+    const conKm = tornei.some(t => t.km != null);
+    const filtri = (regioni.length > 1 ? `<select id="trRegione" aria-label="Regione"><option value="">Tutte le regioni</option>
+          ${regioni.map(r => `<option value="${esc(r)}"${r === v.regione ? ' selected' : ''}>${esc(r)}</option>`).join('')}</select>` : '')
+        + (conKm ? `<select id="trDistanza" aria-label="Distanza">
+          ${TR_DISTANZE.map(k => `<option value="${k}"${k === v.km ? ' selected' : ''}>${k ? 'Entro ' + k + ' km' : 'Ovunque'}</option>`).join('')}</select>` : '');
+    return `${filtri ? `<div class="trFiltri">${filtri}</div>` : ''}
       <div class="tabs">
         <button id="trTabProssimi"${stato.passati ? '' : ' class="att"'}>In arrivo (${v.prossimi.length})</button>
         <button id="trTabPassati"${stato.passati ? ' class="att"' : ''}>Passati (${v.passati.length})</button>
       </div>
       ${lista.length ? trHtmlMesi(lista, piuFederazioni, oggi)
-        : `<p class="vuoto">${stato.passati ? 'Nessun torneo passato' : 'Nessun torneo in arrivo'}${v.regione ? ' in ' + esc(v.regione) : ''}.</p>`}`;
+        : `<p class="vuoto">${stato.passati ? 'Nessun torneo passato' : 'Nessun torneo in arrivo'}${v.km ? ' entro ' + v.km + ' km' : ''}${v.regione ? ' in ' + esc(v.regione) : ''}.</p>`}
+      ${conKm ? '<p class="trNota">I km sono in linea d\'aria dal nostro campo di gara: per strada sono di più.</p>' : ''}`;
 }
 
 // Disegna la sezione dentro c e aggancia filtro e schede. Richiamata con
@@ -386,6 +417,12 @@ function trDisegna(c, tornei) {
         if (reg) reg.onchange = () => {
             trStato.regione = reg.value;
             try { localStorage.setItem('ttm.tornei.regione', reg.value); } catch { }
+            ridisegna();
+        };
+        const dist = c.querySelector('#trDistanza');
+        if (dist) dist.onchange = () => {
+            trStato.km = +dist.value || 0;
+            try { localStorage.setItem('ttm.tornei.km', String(trStato.km)); } catch { }
             ridisegna();
         };
         const tab = (id, passati) => { const b = c.querySelector(id); if (b) b.onclick = () => { trStato.passati = passati; ridisegna(); }; };
