@@ -84,7 +84,21 @@ document.addEventListener('ttm-uid', e => {
     lvRicorda(lv.uid, a);
 });
 
+// Le squadre dell'incontro che non hanno nemmeno un giocatore in formazione
+// (nomi). Incontro gia' terminato: non si chiede nulla.
+async function lvSenzaFormazione(uid) {
+    const inc = await leggi('incontri', uid);
+    if (!inc || inc.eliminato || inc.stato === 'Terminato') return [];
+    const righe = (await perIndice('formazioni', 'incontro_uid', uid))
+        .filter(r => r.atleta_uid && RUOLI_TITOLARI.includes(r.ruolo));
+    const squadre = await Promise.all([leggi('squadre', inc.squadra_casa_uid), leggi('squadre', inc.squadra_ospite_uid)]);
+    return squadre.filter(s => s && !righe.some(r => r.squadra_uid === s.uid)).map(s => s.nome);
+}
+
 async function lvApri(uid) {
+    // Formazione non compilata: avviso e conferma (comune.js). Chi rinuncia
+    // resta dov'era (elenco dei Punti o scheda dell'incontro).
+    if (!lvConfermaSenzaFormazione(uid, await lvSenzaFormazione(uid))) return;
     lv = { uid, partita: lvRicordata(uid) };
     lvHtml = '';
     Sync.pausaMs = LV_PAUSA_SYNC_MS();

@@ -338,16 +338,12 @@ function trHtmlTorneo(t, piuFederazioni, oggi) {
     const dove = [t.localita, t.km != null ? `≈ ${t.km} km` : null, t.regione, t.tipo, fed].filter(Boolean).join(' · ');
     const url = trIndirizzo(t.url), programma = trIndirizzo(t.programma), mappa = trMappa(t.localita);
     const gare = (t.gare || []).filter(Boolean);
-    // Testo della lettera allegata dal PC (categorie, orari, iscrizioni,
-    // quote): cosi' com'e', con i suoi a capo
-    const lettera = String(t.dettagli || '').trim();
     return `<li class="atleta trVoce">
       <details class="trTorneo">
         <summary><b>${esc(trQuando(t))}</b>${inCorso ? ' <i class="trOggi">oggi</i>' : ''} ${esc(nome)}<br><small>${esc(dove)}</small></summary>
         <div class="trDett">
           ${gare.length ? '<ul class="trGare">' + gare.map(g => `<li>${esc(g)}</li>`).join('') + '</ul>'
-            : lettera ? '' : '<p class="trNo">Gare non indicate sul sito.</p>'}
-          ${lettera ? `<div class="trLettera">${esc(lettera)}</div>` : ''}
+            : '<p class="trNo">Gare non indicate sul sito.</p>'}
           ${url || programma || mappa ? `<p class="trLink">
             ${url ? `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">Scheda sul sito ${esc(t.federazione || '')}</a>` : ''}
             ${programma ? `<a href="${esc(programma)}" target="_blank" rel="noopener noreferrer">Programma (PDF)</a>` : ''}
@@ -430,6 +426,25 @@ function trDisegna(c, tornei) {
         tab('#trTabPassati', true);
     };
     ridisegna();
+}
+
+// ---------------- punti: formazione non compilata ----------------
+// Prima di aprire i Punti di un incontro: se una squadra (o tutte e due) non
+// ha nemmeno un giocatore in formazione lo si dice, si ricorda dove si
+// compila e si chiede se andare avanti lo stesso. Senza formazione i punti
+// si segnano, ma al posto dei nomi ci sono le squadre e il referto resta da
+// completare. Chi conferma non viene piu' interrogato su quell'incontro
+// finche' l'app resta aperta.
+// squadre = nomi delle squadre senza formazione (vuoto = tutto a posto).
+// Ritorna true se si possono aprire i Punti.
+const lvSenzaFormazioneOk = new Set();
+function lvConfermaSenzaFormazione(incontro, squadre) {
+    if (!squadre.length || lvSenzaFormazioneOk.has(String(incontro))) return true;
+    const ok = confirm(`Formazione non compilata: ${squadre.join(' e ')}.\n\n` +
+        'La formazione si compila in Incontri: tocca l\'incontro, poi "Formazione".\n\n' +
+        'Segnare i punti lo stesso, senza formazione? (non consigliato)');
+    if (ok) lvSenzaFormazioneOk.add(String(incontro));
+    return ok;
 }
 
 // ---------------- punti: sorteggio del doppio ----------------
