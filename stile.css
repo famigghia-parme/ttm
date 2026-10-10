@@ -290,3 +290,27 @@ li.ca-nuovo .caVar b, li.ca-stabile .caVar b { font-weight: 400; }
 /* I primi 3 saliti di piu': stella davanti al nome, fascia a sinistra e sfondo */
 li.caRiga.migliore { background: #fce4ec; border-left-color: #c2185b; }
 .caStella { font-style: normal; color: #c2185b; }
+
+/* ---------- disponibilita' per le gare (10/10, 1.2.0) ---------- */
+.dsRiassunto { font-weight: 700; text-align: center; margin: 4px 0 8px; }
+.dsIo { display: block; font-size: 12px; color: var(--grigio); margin-bottom: 6px; }
+.dsIo select { margin: 2px 0 0; }
+ul.dsElenco { margin: 0; padding: 0; }
+/* il nome e, sotto, le quattro risposte in fila */
+li.dsRiga { list-style: none; padding: 8px 4px 8px 0; border-bottom: 1px solid var(--bordo); border-left: 6px solid transparent; }
+li.dsRiga:last-child { border-bottom: 0; }
+li.dsRiga > b { display: block; padding-left: 4px; font-weight: 600; overflow-wrap: anywhere; }
+li.dsRiga > b small { font-weight: 700; font-size: 11px; background: var(--verde); color: #fff; border-radius: 8px; padding: 1px 7px; }
+/* la mia riga: fascia a sinistra, sfondo e la scritta "tu" */
+li.dsRiga.io { background: #e8f5e9; border-left-color: var(--verde); }
+.dsScelta { display: flex; gap: 4px; margin-top: 6px; padding-left: 4px; }
+.dsScelta button { flex: 1 1 0; min-width: 0; padding: 9px 2px; border: 1px solid var(--bordo); border-radius: 8px; background: #fff;
+                   font-family: inherit; font-size: 14px; color: #333; white-space: nowrap; touch-action: manipulation; }
+/* la risposta scelta: pulsante pieno, in grassetto (non solo il colore: e' l'unico pieno della riga) */
+.dsScelta button.att { background: #111; color: #fff; border-color: #111; font-weight: 700; }
+.dsScelta button[data-r="Si"].att { background: var(--verde); border-color: var(--verde); }
+.dsScelta button[data-r="No"].att { background: #b71c1c; border-color: #b71c1c; }
+.dsScelta button[data-r="Forse"].att { background: #8a5a00; border-color: #8a5a00; }
+.dsScelta button[data-r="NonSo"].att { background: #666; border-color: #666; }
+/* riassunto sotto un incontro dei "Prossimi" e nella scheda */
+small.dsBreve { display: block; color: #333; }

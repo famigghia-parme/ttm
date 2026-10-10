@@ -3,7 +3,8 @@
 // locali: funziona anche offline. Dalla scheda si aprono la Formazione
 // (formazione.js), i Punti (live.js) e i Dati del referto (referto.js),
 // che disegnano qui dentro, si scarica il punto per punto per la gara e si
-// crea il referto in PDF (pdf.js).
+// crea il referto in PDF (pdf.js). Dal 10/10 (1.2.0) anche la
+// Disponibilità (disponibilita.js): chi c'e' per quella gara.
 //
 // Due sezioni del menu usano questo file (stessa struttura nella PWA in
 // rete locale, wwwroot/incontri.js):
@@ -19,14 +20,16 @@ try {
 
 const inVista = modo => ({
     html: '<div id="inCorpo"></div>',
-    init: () => { inModo = modo; inAperto = null; fz = null; fzModificata = false; fzRitorno = null; rf = null; rfModificata = false; lvLascia(); inElenco(); },
+    init: () => { inModo = modo; inAperto = null; fz = null; fzModificata = false; fzRitorno = null; rf = null; rfModificata = false; ds = null; lvLascia(); inElenco(); },
     // Si passa a un'altra vista (Rosa, Atleti, Account): i Punti si chiudono.
     esci: () => lvLascia(),
     // Punti aperti: si ridisegnano dai dati locali (solo se e' cambiato
     // qualcosa). Formazione aperta: con modifiche non salvate non si
     // ridisegna nulla (si perderebbero); senza, si ricarica con i dati nuovi.
     // Lo stesso per i Dati del referto.
+    // Disponibilita' aperta: si ridisegna (le risposte degli altri).
     suDati: () => lv ? lvDisegna()
+        : ds ? dsMostra()
         : fz ? (fzModificata ? null : fzApri(fz.uid, fz.sel, true))
         : rf ? (rfModificata ? null : rfApri(rf.uid, true))
         : inAperto ? inScheda(inAperto) : inElenco()
@@ -77,6 +80,10 @@ async function inElenco() {
         .sort((a, b) => (t(b) === Infinity ? 0 : t(b)) - (t(a) === Infinity ? 0 : t(a)));
     const mostrate = passate ? fatte : da;
     const scaricati = await metaLeggi('scaricati', []);
+    // Disponibilita' (10/10): sotto ogni gara dei "Prossimi" chi c'e' ("Sì 3 ·
+    // Forse 1 · No 1 · Non so 2"). Solo li' (sono poche) e non nella sezione Punti.
+    const chiCe = new Map();
+    if (!punti) for (const x of prossimi?.voci || []) chiCe.set(x.i.uid, await dsBreve(x.i.uid));
 
     // conCampionato: nei "Prossimi" (fuori dai gruppi) serve dire di che campionato e'
     const voce = (x, conCampionato) => `
@@ -85,6 +92,7 @@ async function inElenco() {
         ${x.terminato ? `<span>${x.i.punti_casa ?? '-'} - ${x.i.punti_ospite ?? '-'}</span>`
             : scaricati.includes(x.i.uid) ? '<span>📥</span>' : ''}<br>
         <small>${esc(dataBreve(x.i.data_ora))}${conCampionato === true ? ' · ' + esc(x.c.nome) + (x.girone ? ' ' + esc(x.girone) : '') : ''}</small>
+        ${conCampionato === true && chiCe.get(x.i.uid) ? `<small class="dsBreve">Chi c'è: ${esc(chiCe.get(x.i.uid))}</small>` : ''}
       </li>`;
 
     // Tanti incontri: raggruppati per federazione > campionato > girone
@@ -171,6 +179,8 @@ async function inScheda(uid) {
     };
 
     const scaricato = await metaLeggi('scaricato.' + uid);
+    // Disponibilita': solo per le gare delle nostre squadre non ancora giocate
+    const chiCe = x.nostro && !x.terminato ? await dsBreve(uid) : '';
     c.innerHTML = `
       <button class="pieno chiaro" id="inIndietro">${inModo === 'punti' ? '← Punti' : '← Incontri'}</button>
       <div class="lvTesta">${htmlNomeSquadra(x.casa?.nome)}
@@ -180,6 +190,8 @@ async function inScheda(uid) {
       ${x.terminato ? '' : `
         <button class="pieno" id="inPunti">🏓 Segna i punti</button>
         <button class="pieno" id="inFormazione">✏️ Formazione</button>
+        ${x.nostro ? `<button class="pieno chiaro" id="inDisponibilita">🙋 Disponibilità</button>
+        <div class="lvInfo" id="inChiCe">${chiCe ? 'Chi c\'è: ' + esc(chiCe) : 'Chi c\'è per questa gara: lo dice ogni giocatore dal suo telefono.'}</div>` : ''}
         <button class="pieno chiaro" id="inScarica">${scaricato ? '📥 Scaricato — aggiorna' : '📥 Scarica per la gara'}</button>
         <div class="lvInfo">${scaricato ? 'Ultimo scarico: ' + new Date(scaricato).toLocaleString('it-IT') : 'Da fare prima di partire, con la rete: poi funziona anche senza.'}</div>`}
       <button class="pieno chiaro" id="inReferto">📋 Dati del referto</button>
@@ -197,6 +209,8 @@ async function inScheda(uid) {
     if (bp) bp.onclick = () => lvApri(uid);
     const bf = $('#inFormazione');
     if (bf) bf.onclick = () => fzApri(uid);
+    const bd = $('#inDisponibilita');
+    if (bd) bd.onclick = () => dsApri(uid);
     // Anche a incontro terminato: ora di fine e provvedimenti si scrivono dopo
     $('#inReferto').onclick = () => rfApri(uid);
     // Referto PDF (pdf.js): lo crea il telefono, anche senza rete. Se e'

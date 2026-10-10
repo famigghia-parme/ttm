@@ -538,9 +538,11 @@ function trDisegna(c, tornei) {
 // FITET"): i telefoni le leggono soltanto.
 // Salito / sceso / uguale si leggono dal SIMBOLO e dal numero (il colore e'
 // in piu'); la stella va ai primi 3 saliti di piu' (a pari merito col
-// terzo, tutti quelli alla pari).
+// terzo, tutti quelli alla pari) e, in piu' (1.1.1), alle prime 2 fra le
+// donne: sono poche, senza questo la stella andrebbe quasi solo agli uomini.
 
 const CA_MIGLIORI = 3;
+const CA_MIGLIORI_DONNE = 2;
 const caData = d => String(d || '').slice(0, 10);
 const caGiorno = iso => iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : '';
 
@@ -576,12 +578,16 @@ function caCalcola(atleti, ultima = null, precedente = null) {
         t.righe.push(r);
     }
 
-    // I primi 3 saliti di piu' (a pari merito col terzo, tutti)
-    const saliti = t.righe.filter(r => r.andamento === 'salito').sort((a, b) => b.variazione - a.variazione);
-    if (saliti.length) {
-        const soglia = saliti[Math.min(CA_MIGLIORI, saliti.length) - 1].variazione;
+    // I primi 3 saliti di piu' in assoluto e, in piu', le prime 2 fra le
+    // donne (a pari merito con l'ultimo del gruppo, tutti quelli alla pari)
+    const segna = (righe, quanti) => {
+        const saliti = righe.filter(r => r.andamento === 'salito').sort((a, b) => b.variazione - a.variazione);
+        if (!saliti.length) return;
+        const soglia = saliti[Math.min(quanti, saliti.length) - 1].variazione;
         for (const r of saliti) if (r.variazione >= soglia) r.migliore = true;
-    }
+    };
+    segna(t.righe, CA_MIGLIORI);
+    segna(t.righe.filter(r => r.sesso === 'F'), CA_MIGLIORI_DONNE);
 
     const gruppo = r => r.sesso === 'F' ? 0 : r.sesso === 'M' ? 1 : 2;
     const maiuscolo = r => r.nome.toUpperCase();
@@ -628,7 +634,7 @@ function caHtml(atleti, stato = caStato) {
           <span class="caPunti">${r.punti ?? ''}</span></li>`;
     };
     return `${scelta}
-      ${t.precedente ? `<div class="lvInfo">▲ salito · ▼ sceso · = uguale${t.righe.some(r => r.migliore) ? ` · ★ i ${CA_MIGLIORI} saliti di più` : ''}</div>`
+      ${t.precedente ? `<div class="lvInfo">▲ salito · ▼ sceso · = uguale${t.righe.some(r => r.migliore) ? ` · ★ i ${CA_MIGLIORI} saliti di più${t.righe.some(r => r.sesso === 'F') ? ` e le prime ${CA_MIGLIORI_DONNE} donne` : ''}` : ''}</div>`
         : '<div class="lvInfo">C\'è una sola classifica: per il confronto serve la prossima.</div>'}
       <ul class="caElenco">
         <li class="caRiga caTesta"><span>Pos.</span><span>Atleta · squadra</span><span>Variazione</span><span>Punti</span></li>
@@ -655,6 +661,105 @@ function caDisegna(c, atleti) {
         if (p) p.onchange = () => { caStato.precedente = p.selectedIndex === 0 ? null : p.value; ridisegna(); };
     };
     ridisegna();
+}
+
+// ---------------- disponibilita' per le gare ----------------
+// (10/10 sera, versione 1.2.0) Chi c'e' per una gara di una nostra squadra:
+// il foglio presenze della squadra. Ogni atleta della rosa ha una risposta
+// fra quattro, decise con l'utente: Si' / Forse / No / Non so. "Non so" e'
+// anche chi non ha ancora risposto (nessuna riga). Chiunque puo' rispondere
+// per chiunque della rosa: gli account dei telefoni non sono legati a un
+// atleta; il telefono ricorda soltanto "chi sono io" per mettere quella
+// riga in cima. Nel cloud resta scritto chi ha toccato la riga.
+// Per ora solo via cloud (pwa-cloud/disponibilita.js): chi risponde e' a
+// casa, senza il PC. Conti, testi e disegno stanno qui, pronti anche per
+// la rete locale. Gemelli sul PC: Services/DisponibilitaLogica.cs (Uid,
+// Riassunto, nomi e segni): se cambia uno va cambiato l'altro.
+
+// v = il valore che viaggia (enum RispostaDisponibilita del PC)
+const DS_RISPOSTE = [
+    { v: 'Si', nome: 'Sì', segno: '✔' },
+    { v: 'Forse', nome: 'Forse', segno: '?' },
+    { v: 'No', nome: 'No', segno: '✖' },
+    { v: 'NonSo', nome: 'Non so', segno: '…' }
+];
+const dsRisposta = v => DS_RISPOSTE.find(r => r.v === v) || DS_RISPOSTE[3];
+
+// L'uid della riga, ricavato da incontro e atleta: le 32 cifre esadecimali
+// dell'incontro combinate una a una (XOR) con quelle dell'atleta lette AL
+// CONTRARIO. Cosi' due telefoni (o il PC) che rispondono per lo stesso
+// atleta nello stesso incontro scrivono la STESSA riga, e vale l'ultima
+// risposta, invece di due doppioni. Al contrario: senza, due coppie
+// "incrociate" (incontro 1 + atleta 4, incontro 4 + atleta 1) con uid che
+// differiscono nelle stesse cifre darebbero la stessa riga.
+function dsUid(uidIncontro, uidAtleta) {
+    const a = String(uidIncontro).replace(/-/g, '').toLowerCase(), b = String(uidAtleta).replace(/-/g, '').toLowerCase();
+    if (!/^[0-9a-f]{32}$/.test(a) || !/^[0-9a-f]{32}$/.test(b)) return `${uidIncontro}~${uidAtleta}`;   // uid non standard: solo nei test
+    let c = '';
+    for (let i = 0; i < 32; i++) c += (parseInt(a[i], 16) ^ parseInt(b[31 - i], 16)).toString(16);
+    return `${c.slice(0, 8)}-${c.slice(8, 12)}-${c.slice(12, 16)}-${c.slice(16, 20)}-${c.slice(20)}`;
+}
+
+// "Sì 3 · Forse 1 · No 1 · Non so 2": sempre tutte e quattro, si vede subito chi manca
+function dsRiassunto(risposte) {
+    const n = Object.fromEntries(DS_RISPOSTE.map(r => [r.v, 0]));
+    for (const v of risposte) n[dsRisposta(v).v]++;
+    return DS_RISPOSTE.map(r => `${r.nome} ${n[r.v]}`).join(' · ');
+}
+
+// Accanto al nome nelle tendine della formazione: "Rossi Mario · ✔ sì".
+// Chi non ha risposto resta col solo nome.
+function dsNomeConRisposta(nome, risposta) {
+    const r = dsRisposta(risposta);
+    return r.v === 'NonSo' ? nome : `${nome} · ${r.segno} ${r.nome.toLowerCase()}`;
+}
+
+// d = { casa, ospite, info, io: id dell'atleta "sono io" (o null),
+//       squadre: [{ nome, atleti: [{ id, nome, risposta }] }] }
+// Una riga per atleta: il nome e sotto i quattro pulsanti, quello scelto e'
+// pieno e ha davanti il suo segno. La riga di "io" e' la prima, con "tu".
+function dsHtml(d) {
+    const tutti = d.squadre.flatMap(s => s.atleti);
+    if (!tutti.length)
+        return `<button class="pieno chiaro" id="dsIndietro">← Incontro</button>
+          <p class="vuoto">Nessun atleta in rosa per questa squadra.<br>La rosa si compila dalla sezione Rosa.</p>`;
+    const noti = new Map(tutti.map(a => [String(a.id), a]));
+    const io = d.io != null && noti.has(String(d.io)) ? String(d.io) : '';
+    const riga = a => `<li class="dsRiga${String(a.id) === io ? ' io' : ''}">
+        <b>${esc(a.nome)}${String(a.id) === io ? ' <small>tu</small>' : ''}</b>
+        <span class="dsScelta">${DS_RISPOSTE.map(r => `<button type="button" data-a="${esc(a.id)}" data-r="${r.v}"${
+            dsRisposta(a.risposta).v === r.v ? ' class="att" aria-pressed="true"' : ' aria-pressed="false"'}>${r.segno} ${r.nome}</button>`).join('')}</span></li>`;
+    const elenco = s => {
+        const ordinati = [...s.atleti].sort((x, y) => (String(y.id) === io) - (String(x.id) === io) || x.nome.localeCompare(y.nome, 'it'));
+        return `${d.squadre.length > 1 ? `<h4>${esc(s.nome)}</h4>` : ''}
+          ${ordinati.length ? `<ul class="dsElenco">${ordinati.map(riga).join('')}</ul>` : '<p class="vuoto">Rosa vuota</p>'}`;
+    };
+    const nomi = [...noti.values()].sort((x, y) => x.nome.localeCompare(y.nome, 'it'));
+    return `<button class="pieno chiaro" id="dsIndietro">← Incontro</button>
+      <div class="lvTesta">${htmlNomeSquadra(d.casa)}<span class="lvTot">–</span>${htmlNomeSquadra(d.ospite)}</div>
+      <div class="lvInfo">${esc(d.info || '')}</div>
+      <h4>Chi c'è?</h4>
+      <div class="dsRiassunto" id="dsRiassunto">${esc(dsRiassunto(tutti.map(a => a.risposta)))}</div>
+      <label class="dsIo">Chi sei? (la tua riga va in cima)
+        <select id="dsIo"><option value="">— scegli il tuo nome —</option>
+          ${nomi.map(a => `<option value="${esc(a.id)}"${String(a.id) === io ? ' selected' : ''}>${esc(a.nome)}</option>`).join('')}</select></label>
+      ${d.squadre.map(elenco).join('')}
+      <p class="trNota">Ognuno può rispondere anche per un compagno. "Non so" è anche chi non ha ancora risposto. La risposta si salva al tocco.</p>`;
+}
+
+// Disegna dentro c e aggancia i pulsanti.
+//   azioni = { indietro(), scegli(idAtleta, risposta), sonoIo(idAtleta o '') }
+// Richiamata con gli stessi dati di prima non ridisegna (niente sfarfallio
+// a ogni sincronizzazione).
+function dsDisegna(c, d, azioni) {
+    const firma = JSON.stringify(d);
+    if (c.dataset.dsFirma === firma && c.querySelector('#dsIndietro')) return;
+    c.dataset.dsFirma = firma;
+    c.innerHTML = dsHtml(d);
+    c.querySelector('#dsIndietro').onclick = () => azioni.indietro();
+    const io = c.querySelector('#dsIo');
+    if (io) io.onchange = () => azioni.sonoIo(io.value);
+    c.querySelectorAll('.dsScelta button').forEach(b => b.onclick = () => azioni.scegli(b.dataset.a, b.dataset.r));
 }
 
 // ---------------- punti: formazione non compilata ----------------
@@ -936,4 +1041,5 @@ function fzAgganciaStaff(contenitore, staff, toccata, numerico = false) {
 }
 
 // Solo per i test in Node (test-ranking.js): nel browser `module` non esiste
-if (typeof module !== 'undefined' && module.exports) module.exports = { caCalcola, caVariazione, caGiorno, CA_MIGLIORI };
+if (typeof module !== 'undefined' && module.exports) module.exports = { caCalcola, caVariazione, caGiorno, CA_MIGLIORI,
+    DS_RISPOSTE, dsUid, dsRiassunto, dsNomeConRisposta, dsRisposta };

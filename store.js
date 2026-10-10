@@ -148,6 +148,7 @@ async function perIndice(t, indice, valore) {
 
 // Anche se eliminata: serve al sync e per riusare righe di rosa tolte.
 async function leggi(t, uid) {
+    if (ELENCHI_SCRIVIBILI.includes(t)) return (await metaLeggi(t, [])).find(r => r.uid === uid);
     const db = await apriDb();
     return idbReq(db.transaction(t).objectStore(t).get(uid));
 }
@@ -168,6 +169,30 @@ async function metaScrivi(chiave, valore) {
 async function contaInAttesa() {
     const db = await apriDb();
     return idbReq(db.transaction('outbox').objectStore('outbox').count());
+}
+
+// ---------------- tabelle tenute in 'meta' che il telefono scrive ----------------
+// (10/10 sera) La disponibilita' per le gare sta, come tornei e classifiche
+// degli atleti, per intero in UNA voce di 'meta' col nome della tabella
+// (vedi sync.js, ELENCHI: niente contenitore nuovo, la versione del
+// database del telefono non cambia). A differenza di quelle, il telefono la
+// SCRIVE: la riga cambiata va nell'elenco e in outbox nella STESSA
+// transazione, cosi' il sync (push e pull) non la puo' vedere a meta'.
+const ELENCHI_SCRIVIBILI = ['disponibilita'];
+
+async function scriviElenco(t, riga) {
+    const db = await apriDb();
+    const tx = db.transaction(['meta', 'outbox'], 'readwrite');
+    const meta = tx.objectStore('meta');
+    const elenco = (await idbReq(meta.get(t))) || [];
+    const ora = adesso();
+    const nuova = { eliminato: false, ...riga, modificato_il: ora };
+    const k = elenco.findIndex(r => r.uid === nuova.uid);
+    if (k >= 0) elenco[k] = { ...elenco[k], ...nuova }; else elenco.push(nuova);
+    meta.put(elenco, t);
+    tx.objectStore('outbox').put({ chiave: t + ':' + nuova.uid, tabella: t, uid: nuova.uid, rev: ora + Math.random() });
+    await idbFine(tx);
+    document.dispatchEvent(new Event('ttm-locale'));
 }
 
 // ---------------- scrittura locale (va in outbox) ----------------

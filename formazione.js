@@ -70,6 +70,7 @@ async function fzApri(uidIncontro, uidSquadra, daSync = false) {
         tutti('atleti')]);
     const A = perUid(atleti);
     const doppio = partite.find(p => p.tipo === 'Doppio');
+    const chiCe = await dsRisposte(uidIncontro);        // disponibilita.js: uid atleta -> risposta
 
     const squadra = async (sq, inCasa) => {
         const posti = {};
@@ -90,10 +91,14 @@ async function fzApri(uidIncontro, uidSquadra, daSync = false) {
         const schierati = new Set(Object.values(posti));
         uid = uid.filter(u => inQuadroProponibile(u, nonQuadro, schierati));
 
-        // segna = accanto al nome "(non in quadro)": solo per chi gioca
+        // segna = accanto al nome "(non in quadro)": solo per chi gioca.
+        // (10/10, 1.2.0) Per le NOSTRE squadre anche la disponibilita' data
+        // dal giocatore per questa gara: "Rossi Mario · ✔ sì" (chi non ha
+        // risposto resta col solo nome). E' un'indicazione: si puo' schierare chiunque.
         const voci = (lista, segna = false) => [...new Set(lista)].map(u => A.get(u)).filter(Boolean)
             .map(a => ({ id: a.uid, nome: nomeInQuadro(nomeAtleta(a), segna && nonQuadro.has(a.uid)) }))
-            .sort((a, b) => a.nome.localeCompare(b.nome, 'it'));
+            .sort((a, b) => a.nome.localeCompare(b.nome, 'it'))
+            .map(a => segna && sq.nostra_squadra ? { ...a, nome: dsNomeConRisposta(a.nome, chiCe.get(a.id)) } : a);
         const candidati = voci([...uid, ...schierati], true);
 
         // Staff: valore attuale (tesserato o nome libero) e, oltre alla rosa,

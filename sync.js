@@ -14,11 +14,13 @@ const FOGLIE = new Set(['atleti_societa', 'atleti_squadre', 'formazioni']);
 // Tabelle aggiunte dopo le prime 12 (07/10: tornei). Se il cloud non le ha
 // ancora, o non ha ancora dato il permesso di leggerle (schema.sql /
 // rls.sql non rieseguiti), si saltano: il resto si sincronizza lo stesso.
-// 10/10: classifiche_atleti (classifiche individuali FITET dei nostri atleti).
-const FACOLTATIVE = new Set(['tornei', 'classifiche_atleti']);
-// Tabelle che il telefono legge soltanto e tiene per intero in UNA voce di
-// 'meta' (vedi pullElenco): le scrive il PC.
-const ELENCHI = ['tornei', 'classifiche_atleti'];
+// 10/10: classifiche_atleti (classifiche individuali FITET dei nostri atleti)
+// e disponibilita (chi c'e' per una gara).
+const FACOLTATIVE = new Set(['tornei', 'classifiche_atleti', 'disponibilita']);
+// Tabelle che il telefono tiene per intero in UNA voce di 'meta' (vedi
+// pullElenco). Tornei e classifiche le scrive solo il PC; la disponibilita'
+// la scrive anche il telefono (ELENCHI_SCRIVIBILI e scriviElenco in store.js).
+const ELENCHI = ['tornei', 'classifiche_atleti', 'disponibilita'];
 const PAGINA = 1000;          // massimo di Supabase per richiesta
 const LOTTO = 200;            // righe per upsert
 const MARGINE_MS = 60000;
@@ -116,7 +118,9 @@ async function push(avvisi) {
     const voci = await idbReq(db.transaction('outbox').objectStore('outbox').getAll());
     if (!voci.length) return;
 
-    for (const t of TABELLE) {
+    // In coda le tabelle tenute in 'meta' che il telefono scrive (la
+    // disponibilita': i suoi padri, incontri e atleti, sono gia' passati)
+    for (const t of [...TABELLE, ...ELENCHI_SCRIVIBILI]) {
         const mie = voci.filter(v => v.tabella === t);
         if (!mie.length) continue;
 
@@ -139,6 +143,7 @@ async function push(avvisi) {
             if (!riga) { await togliDaOutbox(v); continue; }
             const pulita = { ...riga };
             delete pulita.sincronizzato_il;           // la scrive il server
+            if (ELENCHI_SCRIVIBILI.includes(t)) delete pulita.modificato_da;   // anche questa (e cosi' le righe hanno tutte le stesse chiavi)
             const firma = Object.keys(pulita).sort().join(',');
             if (!gruppi.has(firma)) gruppi.set(firma, []);
             gruppi.get(firma).push({ v, riga: pulita });
@@ -332,17 +337,27 @@ async function pullElenco(t) {
 
 // Ritorna quante righe sono davvero cambiate (le ultime tornano a ogni giro
 // per via del margine: uguali a prima, non contano).
+// Tutto in UNA transazione con l'outbox: per le tabelle che il telefono
+// scrive (disponibilita) una risposta data qui e non ancora inviata vince
+// se e' piu' recente di quella del cloud, e un tocco fatto durante il giro
+// non si perde (stessa regola di unisci per le altre tabelle).
 async function unisciElenco(t, righe) {
-    const elenco = await metaLeggi(t, []);
-    const per = new Map(elenco.map(x => [x.uid, x]));
+    const db = await apriDb();
+    const tx = db.transaction(['meta', 'outbox'], 'readwrite');
+    const meta = tx.objectStore('meta'), ob = tx.objectStore('outbox');
+    const per = new Map(((await idbReq(meta.get(t))) || []).map(x => [x.uid, x]));
     let n = 0;
     for (const riga of righe) {
-        const prima = per.get(riga.uid);
+        const prima = per.get(riga.uid), chiave = t + ':' + riga.uid;
+        const pend = await idbReq(ob.get(chiave));
+        if (pend && prima && Date.parse(prima.modificato_il) > Date.parse(riga.modificato_il)) continue;   // vince la nostra
+        if (pend) ob.delete(chiave);        // la nostra era piu' vecchia: non va piu' inviata
         if (riga.eliminato) { if (per.delete(riga.uid)) n++; continue; }
-        if (!prima || prima.modificato_il !== riga.modificato_il) n++;
+        if (!prima || !stessoIstante(prima.modificato_il, riga.modificato_il)) n++;
         per.set(riga.uid, riga);
     }
-    if (n) await metaScrivi(t, [...per.values()]);
+    if (n) meta.put([...per.values()], t);
+    await idbFine(tx);
     return n;
 }
 
