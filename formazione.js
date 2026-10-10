@@ -7,6 +7,9 @@
 //  - candidati = rosa della squadra nella stagione del campionato; se la rosa
 //    e' vuota, i tesserati-atleti della societa'. Chi e' gia' schierato resta
 //    nell'elenco anche se nel frattempo e' uscito dalla rosa;
+//  - (10/10) fra i candidati solo atleti "in quadro" FITET (comune.js): chi
+//    non lo e' non si puo' schierare; se e' gia' schierato resta, con
+//    "(non in quadro)" accanto al nome. Lo staff non si filtra;
 //  - nessun atleta in due posti; il doppio solo fra gli schierati;
 //  - posti vuoti = avviso, si puo' salvare lo stesso;
 //  - staff a referto: capitano, allenatore, dirigente e medico (i primi due
@@ -79,10 +82,19 @@ async function fzApri(uidIncontro, uidSquadra, daSync = false) {
         if (!uid.length)
             uid = (await perIndice('atleti_societa', 'societa_uid', sq.societa_uid))
                 .filter(a => a.stagione === camp.stagione && (a.ruoli & 1)).map(a => a.atleta_uid);
-        const voci = lista => [...new Set(lista)].map(u => A.get(u)).filter(Boolean)
-            .map(a => ({ id: a.uid, nome: nomeAtleta(a) }))
+        // Tesserati della societa' nella stagione: servono anche allo staff
+        const tesserati = (await perIndice('atleti_societa', 'societa_uid', sq.societa_uid))
+            .filter(a => a.stagione === camp.stagione);
+        // Non in quadro FITET: fuori dai candidati, a meno che siano gia' schierati
+        const nonQuadro = fuoriQuadro(tesserati, sq.societa_uid, camp.stagione);
+        const schierati = new Set(Object.values(posti));
+        uid = uid.filter(u => inQuadroProponibile(u, nonQuadro, schierati));
+
+        // segna = accanto al nome "(non in quadro)": solo per chi gioca
+        const voci = (lista, segna = false) => [...new Set(lista)].map(u => A.get(u)).filter(Boolean)
+            .map(a => ({ id: a.uid, nome: nomeInQuadro(nomeAtleta(a), segna && nonQuadro.has(a.uid)) }))
             .sort((a, b) => a.nome.localeCompare(b.nome, 'it'));
-        const candidati = voci([...uid, ...Object.values(posti)]);
+        const candidati = voci([...uid, ...schierati], true);
 
         // Staff: valore attuale (tesserato o nome libero) e, oltre alla rosa,
         // gli altri tesserati della societa' nella stagione (dirigenti, tecnici,
@@ -94,8 +106,7 @@ async function fzApri(uidIncontro, uidSquadra, daSync = false) {
         }
         const inRosa = new Set(candidati.map(a => a.id));
         const altri = voci([
-            ...(await perIndice('atleti_societa', 'societa_uid', sq.societa_uid))
-                .filter(a => a.stagione === camp.stagione).map(a => a.atleta_uid),
+            ...tesserati.map(a => a.atleta_uid),
             ...RUOLI_STAFF.map(r => staff[r].id).filter(Boolean)
         ]).filter(a => !inRosa.has(a.id));
 

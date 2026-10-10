@@ -204,6 +204,34 @@ function etichettaRuolo(r, abc) {
     return { Riserva1: 'Ris. 1', Riserva2: 'Ris. 2', Riserva3: 'Ris. 3' }[r] || r;
 }
 
+// ---------------- "in quadro" FITET ----------------
+// (10/10) Per la rosa e per la formazione si scelgono solo giocatori "in
+// quadro" nel database della federazione. Il valore sta sul tesseramento
+// (atleti_societa.in_quadro): true = in quadro; null = non si sa (CSI,
+// aggiunto a mano) e si puo' scegliere; false = NON si puo' aggiungere.
+// Chi e' gia' in quella rosa o in quella formazione resta dov'e', con la
+// scritta "non in quadro" accanto: lo toglie l'utente. Lo staff non c'entra.
+// Stessa regola sul PC: Services/InQuadroLogica.cs.
+const NON_IN_QUADRO = 'non in quadro';
+
+// nonInQuadro, giaScelti: Set di id (uid nel cloud, numeri in rete locale)
+function inQuadroProponibile(id, nonInQuadro, giaScelti) {
+    return !nonInQuadro.has(id) || giaScelti.has(id);
+}
+
+// "Rossi Anna" oppure "Rossi Anna (non in quadro)"
+function nomeInQuadro(nome, nonInQuadro) {
+    return nonInQuadro ? `${nome} (${NON_IN_QUADRO})` : nome;
+}
+
+// Gli atleti NON in quadro di una societa' in una stagione (Set di uid),
+// dalle righe di atleti_societa.
+function fuoriQuadro(affiliazioni, societaUid, stagione) {
+    return new Set(affiliazioni
+        .filter(a => a.societa_uid === societaUid && a.stagione === stagione && a.in_quadro === false)
+        .map(a => a.atleta_uid));
+}
+
 // ---------------- elenchi raggruppati ----------------
 // Tre livelli: federazione (FITET, CSI) > campionato > girone. Ogni gruppo
 // si apre e si chiude con un tocco; quelli aperti si ricordano per vista.

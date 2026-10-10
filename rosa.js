@@ -1,7 +1,9 @@
 // TennisTavoloManager - rosa.js  (PWA cloud)
 // Vista Rosa sui dati locali. Stessa logica del dialog desktop: sopra chi e'
 // in rosa, sotto gli altri tesserati-atleti della societa' nella stagione
-// del campionato. Nulla viene scritto finche' non si preme "Salva rosa";
+// del campionato. (10/10) Si aggiungono solo atleti "in quadro" FITET: chi
+// non lo e' non compare fra gli "altri tesserati"; se e' gia' in rosa resta,
+// con la scritta "non in quadro" (regola in comune.js). Nulla viene scritto finche' non si preme "Salva rosa";
 // il salvataggio va in outbox e parte al cloud appena c'e' rete.
 
 let rs = null;        // squadra aperta
@@ -67,6 +69,9 @@ async function rsApri(uidSquadra, daSync = false) {
     const classifica = classificaFitet(affiliazioni, S, stag);
 
     const inRosa = new Set(rosaRighe.filter(r => r.stagione === stag).map(r => r.atleta_uid));
+    // Non in quadro FITET: fuori dall'elenco, a meno che siano gia' in rosa
+    const nonQuadro = fuoriQuadro(affiliazioni, squadra.societa_uid, stag);
+    let esclusi = 0;
     const visti = new Set();
     const elenco = [];
     for (const af of affiliazioni) {
@@ -76,11 +81,12 @@ async function rsApri(uidSquadra, daSync = false) {
         const a = A.get(af.atleta_uid);
         if (!a || !a.attivo) continue;
         visti.add(a.uid);
+        if (!inQuadroProponibile(a.uid, nonQuadro, inRosa)) { esclusi++; continue; }
         const cl = classifica.get(a.uid);
         elenco.push({
             uid: a.uid, cognome: a.cognome, nome: a.nome, sesso: SESSO[a.sesso] || '-',
             tessera: af.tessera, categoria: cl?.categoria_fitet, punti: cl?.punti_fitet,
-            inRosa: inRosa.has(a.uid)
+            inRosa: inRosa.has(a.uid), nonInQuadro: nonQuadro.has(a.uid)
         });
     }
     // Chi e' in rosa ma non piu' tesserato resta visibile, per poterlo togliere
@@ -94,7 +100,7 @@ async function rsApri(uidSquadra, daSync = false) {
     const lim = CONFIG.ROSA[federazione(societa?.tipo)] || CONFIG.ROSA.FITET;
     rs = {
         uid: uidSquadra, squadra: squadra.nome, campionato: campionato.nome, stagione: stag,
-        min: minimoRosa(campionato.formula), max: lim.max, atleti: elenco,
+        min: minimoRosa(campionato.formula), max: lim.max, atleti: elenco, esclusi,
         femminile: /femminile/i.test(campionato.nome)
     };
     rsSesso = rs.femminile ? 'F' : '';
@@ -116,6 +122,7 @@ function rsDisegna() {
     <div class="tabs">${filtro('', 'Tutti')}${filtro('F', 'Femmine')}${filtro('M', 'Maschi')}</div>
     <input id="rsCerca" type="search" placeholder="Cerca per nome…">
     <ul id="rsFuori"></ul>
+    ${rsNotaQuadro(rs)}
     <div id="msg"></div>
     <button class="pieno rsSalva" id="rsSalva">Salva rosa</button>`;
 
@@ -135,8 +142,15 @@ function rsDisegna() {
 
 const rsAlfa = (a, b) => (a.cognome + ' ' + a.nome).localeCompare(b.cognome + ' ' + b.nome, 'it');
 
+// Riga sotto l'elenco: quanti tesserati non si vedono perche' non in quadro
+function rsNotaQuadro(r) {
+    return r.esclusi > 0
+        ? `<div class="lvInfo" id="rsQuadro">Non in elenco perché ${NON_IN_QUADRO} FITET: ${r.esclusi}</div>` : '';
+}
+
 function rsDettagli(a) {
     const p = [];
+    if (a.nonInQuadro) p.push('⚠ ' + NON_IN_QUADRO);
     if (a.sesso && a.sesso !== '-') p.push(a.sesso);
     if (a.tessera) p.push('tess. ' + a.tessera);
     if (a.categoria != null) p.push('cat ' + a.categoria);
