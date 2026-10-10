@@ -5,11 +5,11 @@
 // mostra "Nuova versione disponibile".
 // Le chiamate a Supabase non passano da qui (altro dominio).
 
-const VERSIONE = '1.0.1';
+const VERSIONE = '1.1.0';
 const CACHE = 'ttm-' + VERSIONE;
 
 // Tutti i file caricati con ?v= da index.html (script e foglio di stile)
-const SCRIPT = ['stile.css', 'comune.js', 'config.js', 'store.js', 'cloud.js', 'sync.js', 'app.js', 'incontri.js', 'formazione.js', 'referto.js', 'pdf.js', 'gioco.js', 'live.js', 'classifica.js', 'tornei.js', 'rosa.js', 'atleti.js'];
+const SCRIPT = ['stile.css', 'comune.js', 'config.js', 'store.js', 'cloud.js', 'sync.js', 'app.js', 'incontri.js', 'formazione.js', 'referto.js', 'pdf.js', 'gioco.js', 'live.js', 'classifica.js', 'tornei.js', 'ranking.js', 'rosa.js', 'atleti.js'];
 const FILE = ['./', 'index.html', 'manifest.json', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png',
     ...SCRIPT.map(s => `${s}?v=${VERSIONE}`)];
 

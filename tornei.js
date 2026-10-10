@@ -1,7 +1,7 @@
 // TennisTavoloManager - tornei.js  (PWA cloud)
 // Sezione "Tornei": il calendario dei tornei individuali. I tornei li
 // scarica il PC dal sito della federazione e li manda al cloud; il telefono
-// li tiene in copia (sync.js: pullTornei, voce 'tornei' di meta) e li mostra
+// li tiene in copia (sync.js: pullElenco, voce 'tornei' di meta) e li mostra
 // anche senza rete. Qui si leggono soltanto.
 // Il disegno (trDisegna) sta in comune.js, uguale nella PWA in rete locale
 // (TennisTavoloManager/wwwroot/tornei.js, che chiede l'elenco al PC).

@@ -14,7 +14,11 @@ const FOGLIE = new Set(['atleti_societa', 'atleti_squadre', 'formazioni']);
 // Tabelle aggiunte dopo le prime 12 (07/10: tornei). Se il cloud non le ha
 // ancora, o non ha ancora dato il permesso di leggerle (schema.sql /
 // rls.sql non rieseguiti), si saltano: il resto si sincronizza lo stesso.
-const FACOLTATIVE = new Set(['tornei']);
+// 10/10: classifiche_atleti (classifiche individuali FITET dei nostri atleti).
+const FACOLTATIVE = new Set(['tornei', 'classifiche_atleti']);
+// Tabelle che il telefono legge soltanto e tiene per intero in UNA voce di
+// 'meta' (vedi pullElenco): le scrive il PC.
+const ELENCHI = ['tornei', 'classifiche_atleti'];
 const PAGINA = 1000;          // massimo di Supabase per richiesta
 const LOTTO = 200;            // righe per upsert
 const MARGINE_MS = 60000;
@@ -303,7 +307,7 @@ async function pull(avvisi) {
         ricevute += await pullTabella(t, '', 'pull.' + t);
     }
     ricevute += await pullLogPunti();
-    ricevute += await pullTornei();
+    for (const t of ELENCHI) ricevute += await pullElenco(t);
     return ricevute;
 }
 
@@ -315,18 +319,21 @@ async function pull(avvisi) {
 // una versione PRECEDENTE dell'app (il giorno che si torna indietro dopo un
 // bug) non riuscirebbe piu' ad aprirlo. Sono poche centinaia di righe.
 // Si scaricano solo le righe cambiate, come per le altre tabelle.
+// 10/10: stessa strada per le CLASSIFICHE DEGLI ATLETI (classifiche_atleti:
+// una riga per atleta e per classifica ufficiale, qualche centinaio in
+// tutto). La voce di meta ha il nome della tabella, il segno e' 'pull.<tabella>'.
 // ----------------------------------------------------------------
-async function pullTornei() {
-    const segno = await metaLeggi('pull.tornei');
-    const r = await pullDa('tornei', '', segno, unisciTornei);
-    if (r.massimo) await metaScrivi('pull.tornei', r.massimo);
+async function pullElenco(t) {
+    const segno = await metaLeggi('pull.' + t);
+    const r = await pullDa(t, '', segno, unisciElenco);
+    if (r.massimo) await metaScrivi('pull.' + t, r.massimo);
     return r.totale;
 }
 
 // Ritorna quante righe sono davvero cambiate (le ultime tornano a ogni giro
 // per via del margine: uguali a prima, non contano).
-async function unisciTornei(t, righe) {
-    const elenco = await metaLeggi('tornei', []);
+async function unisciElenco(t, righe) {
+    const elenco = await metaLeggi(t, []);
     const per = new Map(elenco.map(x => [x.uid, x]));
     let n = 0;
     for (const riga of righe) {
@@ -335,7 +342,7 @@ async function unisciTornei(t, righe) {
         if (!prima || prima.modificato_il !== riga.modificato_il) n++;
         per.set(riga.uid, riga);
     }
-    if (n) await metaScrivi('tornei', [...per.values()]);
+    if (n) await metaScrivi(t, [...per.values()]);
     return n;
 }
 

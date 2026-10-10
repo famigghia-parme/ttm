@@ -262,3 +262,31 @@ ul.trGare li { padding: 2px 0; }
 .trLink { margin: 0; display: flex; flex-wrap: wrap; gap: 8px; }
 .trLink a { display: inline-block; padding: 9px 12px; border: 1px solid var(--verde); border-radius: 8px;
             color: var(--verde); font-weight: 600; text-decoration: none; background: #fff; font-size: 14px; }
+
+/* ---------- classifica atleti (10/10, 1.1.0) ---------- */
+/* Le due classifiche a confronto, affiancate; una sola prende tutta la riga */
+.caScelta { display: flex; gap: 8px; margin: 4px 0 6px; }
+.caScelta label { flex: 1 1 0; min-width: 0; font-size: 12px; color: var(--grigio); }
+.caScelta select { margin: 2px 0 0; }
+ul.caElenco { margin: 6px 0 0; padding: 0; }
+/* posizione · atleta (sotto: squadra) · variazione (sotto: posizione di prima) · punti */
+li.caRiga { display: grid; grid-template-columns: 46px minmax(0, 1fr) 70px 44px; gap: 6px; align-items: center;
+            padding: 8px 4px 8px 0; border-bottom: 1px solid var(--bordo); border-left: 6px solid transparent;
+            list-style: none; font-variant-numeric: tabular-nums; }
+li.caRiga:last-child { border-bottom: 0; }
+li.caRiga .caPos { text-align: right; font-weight: 700; }
+li.caRiga .caNome, li.caRiga .caVar { display: flex; flex-direction: column; min-width: 0; }
+li.caRiga .caNome b { font-weight: 600; overflow-wrap: anywhere; }
+li.caRiga small { color: var(--grigio); font-size: 12px; font-weight: 400; }
+li.caRiga .caVar { text-align: right; white-space: nowrap; }
+li.caRiga .caPunti { text-align: right; }
+li.caTesta { font-size: 12px; color: var(--grigio); padding: 6px 4px 2px 0; }
+li.caTesta span:nth-child(1), li.caTesta span:nth-child(3), li.caTesta span:nth-child(4) { text-align: right; }
+li.caGruppo { list-style: none; margin: 10px 0 2px; padding: 3px 8px; background: #eee; border-radius: 6px; font-size: 13px; font-weight: 600; }
+/* Il colore e' in piu': salito / sceso si leggono dal triangolo e dal numero */
+li.ca-salito .caVar b { color: #2e7d32; }
+li.ca-sceso .caVar b { color: #c62828; }
+li.ca-nuovo .caVar b, li.ca-stabile .caVar b { font-weight: 400; }
+/* I primi 3 saliti di piu': stella davanti al nome, fascia a sinistra e sfondo */
+li.caRiga.migliore { background: #fce4ec; border-left-color: #c2185b; }
+.caStella { font-style: normal; color: #c2185b; }

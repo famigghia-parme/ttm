@@ -130,6 +130,9 @@ const SEZIONI = [
     { v: 'classifica', nome: 'Classifica', icona: '🏆', cosa: 'Punti e posizioni nei gironi' },
     { v: 'tornei',   nome: 'Tornei',   icona: '🏅', cosa: 'Calendario dei tornei' },
     { v: 'atleti',   nome: 'Atleti',   icona: '🪪', cosa: 'Cerca un tesserato, aggiungine uno' },
+    // 10/10 (1.1.0): la tabella "chi sale e chi scende" dei nostri atleti
+    // FITET. Solo nella Home (fuoriBarra): nella barra in basso non c'e' posto.
+    { v: 'ranking',  nome: 'Classifica atleti', icona: '📈', cosa: 'Chi sale e chi scende (FITET)', fuoriBarra: true },
     // fuoriBarra (07/10): con i Tornei le voci sono 7 e nella barra in basso,
     // insieme a Home, non ci stanno piu' (a 360 px "Classifica" veniva
     // tagliata). Account, la meno usata, resta nella Home e si apre anche
@@ -517,6 +520,143 @@ function trDisegna(c, tornei) {
     ridisegna();
 }
 
+// ---------------- classifica atleti ----------------
+// "Classifica atleti" (10/10, versione 1.1.0): la tabella che la societa'
+// faceva con Excel. Per ogni nostro atleta FITET: posizione nella classifica
+// individuale ufficiale, quanto e' salito o sceso rispetto alla classifica
+// prima, squadra e punti. Stesso disegno e stessi conti nelle due PWA;
+// cambia solo da dove arrivano gli atleti (ranking.js: via cloud i dati
+// scaricati sul telefono, in rete locale api/classifica-atleti del PC).
+//   atleti = [{ id, nome, sesso: 'M' | 'F' | '', squadre: 'D3',
+//               storico: [{ data: 'AAAA-MM-GG', posizione, punti, categoria }] }]
+//   squadre = i campionati FITET delle squadre in cui e' in rosa (la
+//   classifica e' della FITET: le squadre CSI non c'entrano).
+// caCalcola e' il GEMELLO di ClassificaAtletiLogica.Calcola sul PC, riga
+// per riga: Tools/TestPwaCloud/test-ranking.js li confronta sui casi di
+// classifica-atleti.json (generato dal C#). Se cambia uno va cambiato l'altro.
+// Le classifiche le scarica il PC ("Classifica atleti" -> "Scarica dal sito
+// FITET"): i telefoni le leggono soltanto.
+// Salito / sceso / uguale si leggono dal SIMBOLO e dal numero (il colore e'
+// in piu'); la stella va ai primi 3 saliti di piu' (a pari merito col
+// terzo, tutti quelli alla pari).
+
+const CA_MIGLIORI = 3;
+const caData = d => String(d || '').slice(0, 10);
+const caGiorno = iso => iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : '';
+
+// ultima / precedente = le due classifiche da confrontare ('AAAA-MM-GG');
+// vuote = le ultime due. Una "precedente" non piu' vecchia dell'ultima non
+// vale: si prende quella subito prima. Ordine: prima le donne, poi gli
+// uomini, ciascun gruppo per posizione; chi non ha posizione in fondo.
+function caCalcola(atleti, ultima = null, precedente = null) {
+    const date = [...new Set(atleti.flatMap(a => (a.storico || []).map(p => caData(p.data))))].sort().reverse();
+    const t = { date, ultima: null, precedente: null, righe: [] };
+    t.ultima = ultima && date.includes(caData(ultima)) ? caData(ultima) : date[0] || null;
+    if (t.ultima) {
+        const prima = date.filter(d => d < t.ultima);
+        t.precedente = precedente && prima.includes(caData(precedente)) ? caData(precedente) : prima[0] || null;
+    }
+
+    for (const a of atleti) {
+        const del = d => d ? (a.storico || []).find(p => caData(p.data) === d) : null;
+        const adesso = del(t.ultima), prima = del(t.precedente);
+        const r = {
+            id: a.id, nome: a.nome || '', sesso: a.sesso || '', squadre: a.squadre || '',
+            posizione: adesso?.posizione ?? null, prima: prima?.posizione ?? null,
+            variazione: null,               // posti guadagnati: positivo = salito
+            andamento: '',                  // salito | sceso | stabile | nuovo | senza (posizione)
+            punti: adesso?.punti ?? null, categoria: adesso?.categoria ?? null, migliore: false
+        };
+        if (r.posizione == null) r.andamento = 'senza';
+        else if (r.prima == null) r.andamento = 'nuovo';
+        else {
+            r.variazione = r.prima - r.posizione;
+            r.andamento = r.variazione > 0 ? 'salito' : r.variazione < 0 ? 'sceso' : 'stabile';
+        }
+        t.righe.push(r);
+    }
+
+    // I primi 3 saliti di piu' (a pari merito col terzo, tutti)
+    const saliti = t.righe.filter(r => r.andamento === 'salito').sort((a, b) => b.variazione - a.variazione);
+    if (saliti.length) {
+        const soglia = saliti[Math.min(CA_MIGLIORI, saliti.length) - 1].variazione;
+        for (const r of saliti) if (r.variazione >= soglia) r.migliore = true;
+    }
+
+    const gruppo = r => r.sesso === 'F' ? 0 : r.sesso === 'M' ? 1 : 2;
+    const maiuscolo = r => r.nome.toUpperCase();
+    t.righe.sort((a, b) => gruppo(a) - gruppo(b)
+        || (a.posizione == null ? 1 : 0) - (b.posizione == null ? 1 : 0)
+        || (a.posizione ?? 0) - (b.posizione ?? 0)
+        || (maiuscolo(a) < maiuscolo(b) ? -1 : maiuscolo(a) > maiuscolo(b) ? 1 : 0));
+    return t;
+}
+
+// "▲ +50", "▼ -12", "=", "nuovo", "" (senza posizione)
+const caVariazione = r => r.andamento === 'salito' ? `▲ +${r.variazione}`
+    : r.andamento === 'sceso' ? `▼ ${r.variazione}`
+    : r.andamento === 'stabile' ? '=' : r.andamento === 'nuovo' ? 'nuovo' : '';
+
+// Le due classifiche scelte nelle tendine: valgono finche' l'app resta
+// aperta (riaprendola si riparte dalle ultime due, quelle che servono).
+const caStato = { ultima: null, precedente: null };
+const CA_GRUPPI = { F: 'Femminile', M: 'Maschile', '': 'Altri' };
+
+function caHtml(atleti, stato = caStato) {
+    if (!atleti.length)
+        return '<p class="vuoto">Nessun atleta FITET della nostra società in questa stagione.<br>Sul PC: pannello Società, casella "È la NOSTRA società".</p>';
+    const t = caCalcola(atleti, stato.ultima, stato.precedente);
+    if (!t.ultima)
+        return '<p class="vuoto">Nessuna classifica. Si scaricano dal PC: "Classifica atleti", "Scarica dal sito FITET".</p>';
+
+    const opzioni = (date, scelta) => date.map(d => `<option value="${d}"${d === scelta ? ' selected' : ''}>${caGiorno(d)}</option>`).join('');
+    const prima = t.date.filter(d => d < t.ultima);
+    const scelta = `<div class="caScelta">
+        <label>Classifica del<select id="caUltima">${opzioni(t.date, t.ultima)}</select></label>
+        ${prima.length ? `<label>rispetto al<select id="caPrima">${opzioni(prima, t.precedente)}</select></label>` : ''}
+      </div>`;
+
+    const piuGruppi = new Set(t.righe.map(r => r.sesso)).size > 1;
+    let ultimoGruppo = null;
+    const riga = r => {
+        const testaGruppo = piuGruppi && r.sesso !== ultimoGruppo ? `<li class="caGruppo">${CA_GRUPPI[r.sesso] || CA_GRUPPI['']}</li>` : '';
+        ultimoGruppo = r.sesso;
+        return `${testaGruppo}<li class="caRiga ca-${r.andamento}${r.migliore ? ' migliore' : ''}">
+          <span class="caPos">${r.posizione ?? '—'}</span>
+          <span class="caNome"><b>${r.migliore ? '<i class="caStella">★</i> ' : ''}${esc(r.nome)}</b>${r.squadre ? `<small>${esc(r.squadre)}</small>` : ''}</span>
+          <span class="caVar"><b>${caVariazione(r)}</b>${r.prima != null && r.posizione != null ? `<small>era ${r.prima}</small>` : ''}</span>
+          <span class="caPunti">${r.punti ?? ''}</span></li>`;
+    };
+    return `${scelta}
+      ${t.precedente ? `<div class="lvInfo">▲ salito · ▼ sceso · = uguale${t.righe.some(r => r.migliore) ? ` · ★ i ${CA_MIGLIORI} saliti di più` : ''}</div>`
+        : '<div class="lvInfo">C\'è una sola classifica: per il confronto serve la prossima.</div>'}
+      <ul class="caElenco">
+        <li class="caRiga caTesta"><span>Pos.</span><span>Atleta · squadra</span><span>Variazione</span><span>Punti</span></li>
+        ${t.righe.map(riga).join('')}
+      </ul>
+      <p class="trNota">Posizioni nella classifica nazionale FITET. Le classifiche le scarica il PC quando la federazione ne pubblica una nuova.</p>`;
+}
+
+// Disegna la sezione dentro c e aggancia le due tendine. Richiamata con gli
+// stessi atleti di prima (dati arrivati dal cloud ma niente di nuovo qui)
+// non ridisegna.
+function caDisegna(c, atleti) {
+    const firma = JSON.stringify(atleti);
+    if (c.dataset.firma === firma && c.firstChild) return;
+    c.dataset.firma = firma;
+    const ridisegna = () => {
+        c.innerHTML = caHtml(atleti);
+        const u = c.querySelector('#caUltima'), p = c.querySelector('#caPrima');
+        // La prima voce di ogni tendina e' la scelta di base (l'ultima
+        // classifica, quella subito prima): sceglierla = "nessuna scelta",
+        // cosi' quando il PC scarica una classifica nuova si passa a quella.
+        // Cambiata l'ultima, la precedente riparte da quella subito prima.
+        if (u) u.onchange = () => { caStato.ultima = u.selectedIndex === 0 ? null : u.value; caStato.precedente = null; ridisegna(); };
+        if (p) p.onchange = () => { caStato.precedente = p.selectedIndex === 0 ? null : p.value; ridisegna(); };
+    };
+    ridisegna();
+}
+
 // ---------------- punti: formazione non compilata ----------------
 // Prima di aprire i Punti di un incontro: se una squadra (o tutte e due) non
 // ha nemmeno un giocatore in formazione lo si dice, si ricorda dove si
@@ -794,3 +934,6 @@ function fzAgganciaStaff(contenitore, staff, toccata, numerico = false) {
         staff[i.dataset.staffNome].nome = i.value; toccata();
     });
 }
+
+// Solo per i test in Node (test-ranking.js): nel browser `module` non esiste
+if (typeof module !== 'undefined' && module.exports) module.exports = { caCalcola, caVariazione, caGiorno, CA_MIGLIORI };
