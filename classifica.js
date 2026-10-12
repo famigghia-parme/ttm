@@ -30,6 +30,29 @@ const Classifica = {
         return Math.sign(vinteB * perseA - vinteA * perseB);
     },
 
+    // (12/10) Classifica a campionato IN CORSO, come il portale FITET, su
+    // tutto il girone: punti, quoziente partite, quoziente set, quoziente
+    // punti di gioco. Gemello di ConfrontaInCorso del PC. < 0 se A va prima.
+    confrontaInCorso(a, b) {
+        return Math.sign(b.punti - a.punti) ||
+            this.quoziente(a.partiteVinte, a.partitePerse, b.partiteVinte, b.partitePerse) ||
+            this.quoziente(a.setVinti, a.setPersi, b.setVinti, b.setPersi) ||
+            this.quoziente(a.puntiFatti, a.puntiSubiti, b.puntiFatti, b.puntiSubiti);
+    },
+
+    // Quoziente vinte/perse (gemello di ConfrontaQuoziente del PC): zero
+    // perse = davanti a tutti, e fra due a zero perse chi ne ha vinte di
+    // piu'; 0-0 dopo chi ha giocato.
+    quoziente(vinteA, perseA, vinteB, perseB) {
+        const nA = vinteA === 0 && perseA === 0, nB = vinteB === 0 && perseB === 0;
+        if (nA || nB) return nA === nB ? 0 : nA ? 1 : -1;
+        const infA = perseA === 0, infB = perseB === 0;
+        if (infA && infB) return Math.sign(vinteB - vinteA);
+        if (infA) return -1;
+        if (infB) return 1;
+        return Math.sign(vinteB * perseA - vinteA * perseB);
+    },
+
     // I numeri di una squadra sugli incontri dati (tutti terminati).
     // incontro = { casa, ospite, pc, po, cc, co, partite: [{ sc, so, sets: [[c, o]...] }] }
     //   pc/po = partite vinte, cc/co = punti in classifica, sc/so = set vinti.
@@ -115,14 +138,29 @@ const Classifica = {
     // (servono solo per la nota "sorteggio"). Ritorna le righe in ordine.
     calcola(squadre, terminati, aperti, criteri = CRITERI_FITET) {
         // In ordine di nome: le parita' che nessun criterio risolve (inizio
-        // stagione, tutte a zero) restano in quest'ordine, uguale sul PC.
+        // stagione, tutte a zero) restano in quest'ordine, uguale sul PC
+        // (dal 12/10 dopo set vinti e punti fatti, vedi sotto).
         const maiuscolo = s => String(s.nome ?? '').toUpperCase();
         const lista = [...squadre].sort((a, b) => {
             const na = maiuscolo(a), nb = maiuscolo(b);
             return na < nb ? -1 : na > nb ? 1 : a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
         });
         const squadraDi = new Map(lista.map(s => [s.id, s]));
-        const righe = lista.map(s => this.statistiche(s, terminati));
+        // (12/10) In ordine di classifica "in corso" (confrontaInCorso). Sort
+        // stabile, come sul PC: a parita' completa resta l'ordine del nome.
+        const righe = lista.map(s => this.statistiche(s, terminati))
+            .sort((a, b) => this.confrontaInCorso(a, b));
+
+        // Campionato IN CORSO (resta un incontro da giocare, o non ne e'
+        // stato giocato nessuno): l'ordine qui sopra, come il portale FITET.
+        // Gli scontri diretti contano solo a campionato FINITO (play-off);
+        // niente sorteggio.
+        if (aperti.length > 0 || terminati.length === 0) {
+            righe.forEach((r, k) => { r.posizione = k + 1; });
+            return righe;
+        }
+
+        // Campionato FINITO: scontri diretti fra le squadre a pari punti.
         const rigaDi = new Map(righe.map(r => [r.id, r]));
 
         // Gruppi a pari punti, dal piu' alto
