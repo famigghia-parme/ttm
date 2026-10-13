@@ -671,9 +671,9 @@ function caDisegna(c, atleti) {
 // per chiunque della rosa: gli account dei telefoni non sono legati a un
 // atleta; il telefono ricorda soltanto "chi sono io" per mettere quella
 // riga in cima. Nel cloud resta scritto chi ha toccato la riga.
-// Per ora solo via cloud (pwa-cloud/disponibilita.js): chi risponde e' a
-// casa, senza il PC. Conti, testi e disegno stanno qui, pronti anche per
-// la rete locale. Gemelli sul PC: Services/DisponibilitaLogica.cs (Uid,
+// Via cloud (pwa-cloud/disponibilita.js) e, dal 13/10 (1.3.0), in rete
+// locale (wwwroot/disponibilita.js, dati dal PC): conti, testi e disegno
+// stanno qui, uguali per le due. Gemelli sul PC: Services/DisponibilitaLogica.cs (Uid,
 // Riassunto, nomi e segni): se cambia uno va cambiato l'altro.
 
 // v = il valore che viaggia (enum RispostaDisponibilita del PC)

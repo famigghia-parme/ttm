@@ -11,7 +11,7 @@
 // riga in cima). Le stesse risposte si vedono e si scrivono dal PC
 // (pannello Incontri, pulsante "Dispon.").
 // Conti, testi e disegno (dsUid, dsRiassunto, dsDisegna) stanno in comune.js.
-// In rete locale questa pagina non c'e' ancora.
+// Dal 13/10 (1.3.0) c'e' anche in rete locale (wwwroot/disponibilita.js).
 
 let ds = null;                  // { uid } = incontro di cui si guardano le disponibilita'
 
