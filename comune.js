@@ -235,6 +235,28 @@ function fuoriQuadro(affiliazioni, societaUid, stagione) {
         .map(a => a.atleta_uid));
 }
 
+// ---------------- atleta in due rose ----------------
+// (21/10) Un atleta sta nella rosa di UNA sola squadra della societa' nella
+// stagione. Fanno eccezione i campionati femminili: una donna puo' stare in
+// una squadra femminile e in una maschile. Solo AVVISO (scelta dell'utente):
+// la scritta accanto al nome e una domanda prima di salvare.
+// Stessa regola sul PC: Services/RoseDoppieLogica.cs.
+function rsFemminile(nomeCampionato) {
+    return /femminile/i.test(nomeCampionato || '');
+}
+
+// altre = nomi delle altre squadre -> "anche in D3 Bergamo A"
+function rsTestoAltre(altre) {
+    return 'anche in ' + altre.join(', ');
+}
+
+// doppi = [{ cognome, nome, altre: [...] }] gia' in rosa anche altrove
+function rsAvvisoDoppi(doppi) {
+    return 'Questi atleti sono anche nella rosa di un\'altra squadra della società:\n' +
+        doppi.map(a => `• ${a.cognome} ${a.nome}: ${a.altre.join(', ')}`).join('\n') +
+        '\n\nUn atleta può stare in una sola squadra. Salvare comunque?';
+}
+
 // ---------------- elenchi raggruppati ----------------
 // Tre livelli: federazione (FITET, CSI) > campionato > girone. Ogni gruppo
 // si apre e si chiude con un tocco; quelli aperti si ricordano per vista.
@@ -1043,3 +1065,16 @@ function fzAgganciaStaff(contenitore, staff, toccata, numerico = false) {
 // Solo per i test in Node (test-ranking.js): nel browser `module` non esiste
 if (typeof module !== 'undefined' && module.exports) module.exports = { caCalcola, caVariazione, caGiorno, CA_MIGLIORI,
     DS_RISPOSTE, dsUid, dsRiassunto, dsNomeConRisposta, dsRisposta };
+
+// ---------------- dove e quando (12/11, 1.4.0) ----------------
+// Scheda di un incontro da giocare: giorno e ora, luogo e il link a Google
+// Maps (sul telefono apre l'app). Senza rete il link non va, ma l'indirizzo
+// resta scritto. Uguale nelle due PWA.
+function urlMappa(luogo) {
+    return 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(luogo);
+}
+function htmlDoveQuando(quando, luogo) {
+    return `<div class="lvInfo inDove"><b>📅 ${esc(quando || 'data da definire')}</b><br>
+        📍 ${luogo ? esc(luogo) : 'luogo non indicato'}</div>` +
+        (luogo ? `<a class="pieno chiaro" id="inMappa" target="_blank" rel="noopener" href="${esc(urlMappa(luogo))}">🗺️ Apri in Google Maps</a>` : '');
+}

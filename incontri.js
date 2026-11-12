@@ -186,14 +186,18 @@ async function inScheda(uid) {
       <div class="lvTesta">${htmlNomeSquadra(x.casa?.nome)}
         <span class="lvTot">${pc ?? '-'} – ${po ?? '-'}<small class="lvEtic">partite</small></span>
         ${htmlNomeSquadra(x.ospite?.nome)}</div>
-      <div class="lvInfo">${esc([dataBreve(i.data_ora), x.c.nome, OSquadra.luogo(i, x.casa)].filter(Boolean).join(' · '))}</div>
-      ${x.terminato ? '' : `
-        <button class="pieno" id="inPunti">🏓 Segna i punti</button>
-        <button class="pieno" id="inFormazione">✏️ Formazione</button>
-        ${x.nostro ? `<button class="pieno chiaro" id="inDisponibilita">🙋 Disponibilità</button>
+      ${x.terminato
+            ? `<div class="lvInfo">${esc([dataBreve(i.data_ora), x.c.nome, OSquadra.luogo(i, x.casa)].filter(Boolean).join(' · '))}</div>`
+            // 12/11 (1.4.0): da giocare = le cose nell'ordine in cui si fanno:
+            // dove e quando, chi c'e', formazione, scarico, punti, referto, PDF
+            : `<div class="lvInfo">${esc(x.c.nome)}</div>
+        ${htmlDoveQuando(i.data_ora ? dataBreve(i.data_ora) : '', OSquadra.luogo(i, x.casa))}
+        ${x.nostro ? `<button class="pieno" id="inDisponibilita">🙋 Disponibilità</button>
         <div class="lvInfo" id="inChiCe">${chiCe ? 'Chi c\'è: ' + esc(chiCe) : 'Chi c\'è per questa gara: lo dice ogni giocatore dal suo telefono.'}</div>` : ''}
+        <button class="pieno" id="inFormazione">✏️ Formazione</button>
         <button class="pieno chiaro" id="inScarica">${scaricato ? '📥 Scaricato — aggiorna' : '📥 Scarica per la gara'}</button>
-        <div class="lvInfo">${scaricato ? 'Ultimo scarico: ' + new Date(scaricato).toLocaleString('it-IT') : 'Da fare prima di partire, con la rete: poi funziona anche senza.'}</div>`}
+        <div class="lvInfo">${scaricato ? 'Ultimo scarico: ' + new Date(scaricato).toLocaleString('it-IT') : 'Da fare prima di partire, con la rete: poi funziona anche senza.'}</div>
+        <button class="pieno chiaro" id="inPunti">🏓 Segna i punti</button>`}
       <button class="pieno chiaro" id="inReferto">📋 Dati del referto</button>
       ${Pdf.nomeModello(x.c.tipo, x.c.formula)
             ? `<button class="pieno chiaro" id="inPdf">📄 Referto PDF</button>

@@ -5,6 +5,9 @@
 // non lo e' non compare fra gli "altri tesserati"; se e' gia' in rosa resta,
 // con la scritta "non in quadro" (regola in comune.js). Nulla viene scritto finche' non si preme "Salva rosa";
 // il salvataggio va in outbox e parte al cloud appena c'e' rete.
+// (21/10) Chi e' gia' nella rosa di un'altra squadra della stessa societa'
+// (stessa stagione; i femminili contano a parte) ha la scritta "anche in ..."
+// e prima di salvare c'e' una domanda: solo avviso (regola in comune.js).
 
 let rs = null;        // squadra aperta
 let rsSesso = '';     // '' = tutti, 'F', 'M'
@@ -60,10 +63,12 @@ async function rsApri(uidSquadra, daSync = false) {
     const societa = await leggi('societa', squadra.societa_uid);
     const stag = campionato.stagione;
 
-    const [affiliazioni, atleti, tutteSoc, rosaRighe] = await Promise.all([
+    const [affiliazioni, atleti, tutteSoc, rosaRighe, tutteRose, tutteSquadre, tuttiCamp] = await Promise.all([
         tutti('atleti_societa'), tutti('atleti'), tutti('societa'),
-        perIndice('atleti_squadre', 'squadra_uid', uidSquadra)]);
+        perIndice('atleti_squadre', 'squadra_uid', uidSquadra),
+        tutti('atleti_squadre'), tutti('squadre'), tutti('campionati')]);
     const A = perUid(atleti), S = perUid(tutteSoc);
+    const altre = rsAltreRose(squadra, campionato, tutteRose, tutteSquadre, perUid(tuttiCamp));
 
     // Categoria/punti FITET della stagione (classificaFitet in app.js)
     const classifica = classificaFitet(affiliazioni, S, stag);
@@ -86,13 +91,15 @@ async function rsApri(uidSquadra, daSync = false) {
         elenco.push({
             uid: a.uid, cognome: a.cognome, nome: a.nome, sesso: SESSO[a.sesso] || '-',
             tessera: af.tessera, categoria: cl?.categoria_fitet, punti: cl?.punti_fitet,
-            inRosa: inRosa.has(a.uid), nonInQuadro: nonQuadro.has(a.uid)
+            inRosa: inRosa.has(a.uid), nonInQuadro: nonQuadro.has(a.uid),
+            altre: altre.get(a.uid) || []
         });
     }
     // Chi e' in rosa ma non piu' tesserato resta visibile, per poterlo togliere
     for (const u of inRosa) if (!visti.has(u) && A.get(u)) {
         const a = A.get(u);
-        elenco.push({ uid: a.uid, cognome: a.cognome, nome: a.nome, sesso: SESSO[a.sesso] || '-', inRosa: true });
+        elenco.push({ uid: a.uid, cognome: a.cognome, nome: a.nome, sesso: SESSO[a.sesso] || '-', inRosa: true,
+            altre: altre.get(a.uid) || [] });
     }
 
     if (daSync && (rsModificata || rs?.uid !== uidSquadra)) return;
@@ -106,6 +113,27 @@ async function rsApri(uidSquadra, daSync = false) {
     rsSesso = rs.femminile ? 'F' : '';
     rsModificata = false;
     rsDisegna();
+}
+
+// (21/10) Atleta -> nomi delle ALTRE squadre della stessa societa' in cui e'
+// in rosa nella stessa stagione, contando solo i campionati dello stesso
+// tipo (femminile con femminile, gli altri fra loro). Map uid -> [nomi].
+function rsAltreRose(squadra, campionato, rose, squadre, C) {
+    const fem = rsFemminile(campionato.nome);
+    const Q = perUid(squadre);
+    const m = new Map();
+    for (const r of rose) {
+        if (r.squadra_uid === squadra.uid || r.stagione !== campionato.stagione) continue;
+        const q = Q.get(r.squadra_uid);
+        if (!q || q.societa_uid !== squadra.societa_uid) continue;
+        const c = C.get(q.campionato_uid);
+        if (!c || c.stagione !== campionato.stagione || rsFemminile(c.nome) !== fem) continue;
+        const l = m.get(r.atleta_uid) || [];
+        if (!l.includes(q.nome)) l.push(q.nome);
+        m.set(r.atleta_uid, l);
+    }
+    for (const l of m.values()) l.sort((a, b) => a.localeCompare(b, 'it'));
+    return m;
 }
 
 // Scheletro costruito UNA volta; le liste si ridisegnano da sole (rsListe),
@@ -151,6 +179,7 @@ function rsNotaQuadro(r) {
 function rsDettagli(a) {
     const p = [];
     if (a.nonInQuadro) p.push('⚠ ' + NON_IN_QUADRO);
+    if (a.altre?.length) p.push('⚠ ' + rsTestoAltre(a.altre));   // 21/10: gia' in un'altra rosa
     if (a.sesso && a.sesso !== '-') p.push(a.sesso);
     if (a.tessera) p.push('tess. ' + a.tessera);
     if (a.categoria != null) p.push('cat ' + a.categoria);
@@ -207,6 +236,9 @@ async function rsSalva() {
     if (voluti.size < rs.min &&
         !await conferma(`In rosa ci sono ${voluti.size} atleti: per giocare ne servono almeno ${rs.min}.\nSalvare comunque?`, 'Attenzione')) return;
     if (rs.max > 0 && voluti.size > rs.max) { msg(`Massimo ${rs.max} atleti in rosa.`); return; }
+    // 21/10: gia' nella rosa di un'altra squadra della societa': avviso, non blocco
+    const doppi = rs.atleti.filter(a => a.inRosa && a.altre?.length).sort(rsAlfa);
+    if (doppi.length && !await conferma(rsAvvisoDoppi(doppi), 'Attenzione')) return;
 
     // Tutte le righe, anche quelle eliminate: si riusano
     const db = await apriDb();
