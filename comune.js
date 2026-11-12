@@ -195,16 +195,19 @@ viste.home = {
 const RUOLI_TITOLARI = ['A', 'B', 'C'];
 const RUOLI_RISERVE = ['Riserva1', 'Riserva2', 'Riserva3'];
 const RUOLI_STAFF = ['Capitano', 'Allenatore', 'Dirigente', 'Medico'];
+// 12/11, CSI Corbillon: chi e' a referto SOLO per il doppio (righe "D"),
+// righe scritte al salvataggio dalla coppia del doppio (DoppioSoloLogica sul PC)
+const RUOLI_DOPPIO = ['Doppio1', 'Doppio2'];
 const STAFF_ALTRO = '*';      // voce "scrivi il nome" nella tendina dello staff
 
 // Ordine in cui si elencano le persone di una formazione (scheda incontro)
-const ORDINE_RUOLI = [...RUOLI_TITOLARI, ...RUOLI_RISERVE, ...RUOLI_STAFF];
+const ORDINE_RUOLI = [...RUOLI_TITOLARI, ...RUOLI_RISERVE, ...RUOLI_DOPPIO, ...RUOLI_STAFF];
 
 // Etichetta corta di un ruolo: A/B/C per chi ha scelto le lettere, X/Y/Z per
 // l'altra squadra; "Ris. 1"; lo staff col suo nome.
 function etichettaRuolo(r, abc) {
     if (r.length === 1) return abc ? r : { A: 'X', B: 'Y', C: 'Z' }[r];
-    return { Riserva1: 'Ris. 1', Riserva2: 'Ris. 2', Riserva3: 'Ris. 3' }[r] || r;
+    return { Riserva1: 'Ris. 1', Riserva2: 'Ris. 2', Riserva3: 'Ris. 3', Doppio1: 'Doppio', Doppio2: 'Doppio' }[r] || r;
 }
 
 // ---------------- "in quadro" FITET ----------------

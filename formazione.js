@@ -5,12 +5,15 @@
 //
 // Stesse regole del PC (DatabaseService.SalvaFormazioneAsync + ApiFormazione):
 //  - candidati = rosa della squadra nella stagione del campionato; se la rosa
-//    e' vuota, i tesserati-atleti della societa'. Chi e' gia' schierato resta
+//    e' vuota, i tesserati-atleti della societa' (12/11: tranne chi e' gia'
+//    in rosa o a referto in un'altra sua squadra, fzImpegnatiAltrove). Chi e' gia' schierato resta
 //    nell'elenco anche se nel frattempo e' uscito dalla rosa;
 //  - (10/10) fra i candidati solo atleti "in quadro" FITET (comune.js): chi
 //    non lo e' non si puo' schierare; se e' gia' schierato resta, con
 //    "(non in quadro)" accanto al nome. Lo staff non si filtra;
-//  - nessun atleta in due posti; il doppio solo fra gli schierati;
+//  - nessun atleta in due posti; il doppio solo fra gli schierati (12/11, CSI
+//    Corbillon: fra tutti i candidati; chi gioca solo il doppio ha una riga
+//    Doppio1/Doppio2, fzRigheSoloDoppio; una sola riserva);
 //  - posti vuoti = avviso, si puo' salvare lo stesso;
 //  - staff a referto: capitano, allenatore, dirigente e medico (i primi due
 //    dal 02/10, gli altri dal 03/10; elenco RUOLI_STAFF in comune.js). Per
@@ -80,15 +83,26 @@ async function fzApri(uidIncontro, uidSquadra, daSync = false) {
         // Candidati: rosa della stagione, altrimenti tesserati-atleti della societa'
         let uid = (await perIndice('atleti_squadre', 'squadra_uid', sq.uid))
             .filter(r => r.stagione === camp.stagione).map(r => r.atleta_uid);
-        if (!uid.length)
+        if (!uid.length) {
+            // 12/11: non chi e' gia' in rosa o a referto in un'ALTRA squadra
+            // della societa' (stessa stagione e tipo di campionato): un atleta
+            // gioca in una squadra sola. Come GetCandidatiFormazioneAsync del PC.
+            const altrove = await fzImpegnatiAltrove(sq, camp);
             uid = (await perIndice('atleti_societa', 'societa_uid', sq.societa_uid))
-                .filter(a => a.stagione === camp.stagione && (a.ruoli & 1)).map(a => a.atleta_uid);
+                .filter(a => a.stagione === camp.stagione && (a.ruoli & 1) && !altrove.has(a.atleta_uid)).map(a => a.atleta_uid);
+        }
         // Tesserati della societa' nella stagione: servono anche allo staff
         const tesserati = (await perIndice('atleti_societa', 'societa_uid', sq.societa_uid))
             .filter(a => a.stagione === camp.stagione);
         // Non in quadro FITET: fuori dai candidati, a meno che siano gia' schierati
         const nonQuadro = fuoriQuadro(tesserati, sq.societa_uid, camp.stagione);
-        const schierati = new Set(Object.values(posti));
+        // 12/11 (CSI): anche chi e' a referto solo per il doppio, o gia' nella
+        // coppia del doppio, resta fra i candidati
+        const coppia = inCasa ? [doppio?.atleta_casa1_uid, doppio?.atleta_casa2_uid]
+            : [doppio?.atleta_ospite1_uid, doppio?.atleta_ospite2_uid];
+        const soloDoppio = righe.filter(r => r.squadra_uid === sq.uid && RUOLI_DOPPIO.includes(r.ruolo) && r.atleta_uid)
+            .map(r => r.atleta_uid);
+        const schierati = new Set([...Object.values(posti), ...soloDoppio, ...coppia.filter(Boolean)]);
         uid = uid.filter(u => inQuadroProponibile(u, nonQuadro, schierati));
 
         // segna = accanto al nome "(non in quadro)": solo per chi gioca.
@@ -133,6 +147,8 @@ async function fzApri(uidIncontro, uidSquadra, daSync = false) {
         uid: uidIncontro, stagione: camp.stagione, formula, nomeFormula: camp.formula,
         titolari, riserve, ruoli,
         haDoppio: !!doppio, doppioLibero: !!doppio && formula.doppio === 'libero',
+        // 12/11, CSI Corbillon: la coppia del doppio fra tutti i candidati
+        doppioDaTutti: !!doppio && formula.doppio === 'libero' && !!formula.doppioDaTutti,
         abc: inc.squadra_lettere_abc_uid === ospite.uid ? ospite.uid : casa.uid,   // predefinito: casa
         squadre,
         // di solito si compila la nostra
@@ -150,8 +166,10 @@ function fzEtichetta(ruolo, abc) {
     return ruolo.replace('Riserva', 'Riserva ');
 }
 
-// Il doppio si sceglie solo fra gli schierati (art. 27 comma 7)
+// Il doppio si sceglie solo fra gli schierati (art. 27 comma 7).
+// 12/11, CSI Corbillon (art. 2A 2026/27): fra tutti i candidati.
 function fzSchierati(sq) {
+    if (fz.doppioDaTutti) return sq.candidati;
     const uid = fz.ruoli.map(r => sq.posti[r]).filter(Boolean);
     return sq.candidati.filter(a => uid.includes(a.id));
 }
@@ -179,7 +197,7 @@ function fzDisegna() {
     ${sq.candidati.length ? '' : '<div class="avviso">Nessun atleta per questa squadra: mettili in rosa (scheda Rosa) o in anagrafica (scheda Atleti).</div>'}
     <h4>Titolari</h4>${fz.titolari.map(riga).join('')}
     ${fz.riserve.length ? '<h4>Riserve</h4>' + fz.riserve.map(riga).join('') : ''}
-    ${doppio ? `<h4>Doppio</h4>
+    ${doppio ? `<h4>Doppio${fz.doppioDaTutti ? ' <small>(anche chi non è sopra)</small>' : ''}</h4>
       <label class="fzRiga"><span>1°</span><select id="fzD1"></select></label>
       <label class="fzRiga"><span>2°</span><select id="fzD2"></select></label>` : ''}
     ${fzHtmlStaff(sq.candidati, sq.altri, sq.staff)}
@@ -232,7 +250,7 @@ function fzErrore() {
         if (fz.doppioLibero) {
             const [d1, d2] = sq.doppio;
             if (d1 && d1 === d2) return `${sq.nome}: il doppio richiede due atleti diversi.`;
-            if ((d1 && !uid.includes(d1)) || (d2 && !uid.includes(d2)))
+            if (!fz.doppioDaTutti && ((d1 && !uid.includes(d1)) || (d2 && !uid.includes(d2))))
                 return `${sq.nome}: il doppio va scelto fra titolari e riserve schierati.`;
         }
         if (sq.colore.trim().length > 40) return `${sq.nome}: colore maglia troppo lungo (max 40 caratteri).`;
@@ -257,6 +275,20 @@ async function fzSalva() {
         const iniziata = fz.ruoli.some(r => sq.posti[r]);
         if (mancanti.length && (sq.uid === fz.sel || iniziata))
             avvisi.push(`${sq.nome}: mancano ${mancanti.map(r => fzEtichetta(r, fz.abc === sq.uid)).join(', ')}`);
+        // 12/11, CSI (art. 2A): con 2 atleti si giocano solo i due singoli e il
+        // doppio, ammesso al massimo 6 volte. Come sul PC: solo avviso.
+        if (fz.doppioDaTutti) {
+            const persone = new Set([...fz.ruoli.map(r => sq.posti[r]), ...sq.doppio].filter(Boolean)).size;
+            if (persone > 0 && persone < 3)
+                avvisi.push(`${sq.nome}: solo ${persone} atleti; nel CSI con 2 atleti si giocano solo i due singoli e il doppio (al massimo 6 volte nel campionato)`);
+            // 13/11: chi gioca solo il doppio senza riserva: nel CSI il terzo atleta
+            // e' la RISERVA, che deve entrare al posto di A o B dopo il doppio
+            const postiSq = new Set(fz.ruoli.map(r => sq.posti[r]).filter(Boolean));
+            const conRiserva = fz.ruoli.filter(r => r.startsWith('Riserva')).some(r => sq.posti[r]);
+            const soloD = [...new Set(sq.doppio.filter(u => u && !postiSq.has(u)))];
+            if (!conRiserva && soloD.length)
+                avvisi.push(`${sq.nome}: ${soloD.map(u => sq.candidati.find(c => c.uid === u || c.id === u)?.nome || '?').join(' e ')} solo nel doppio e nessuna riserva. Nel CSI il terzo atleta va messo come RISERVA: deve entrare al posto di A o di B dopo il doppio`);
+        }
     }
     if (avvisi.length && !await conferma('Formazione incompleta.\n' + avvisi.join('\n') + '\nSalvare comunque?', 'Attenzione')) return;
 
@@ -285,10 +317,17 @@ async function fzSalva() {
             const tessere = new Map((await perIndice('atleti_societa', 'societa_uid', sq.societa))
                 .filter(a => a.stagione === fz.stagione).map(a => [a.atleta_uid, a.tessera]));
             const righeSq = tutteRighe.filter(r => r.squadra_uid === sq.uid);
-            for (const ruolo of fz.ruoli) {
+            // 12/11 (CSI): chi e' nella coppia del doppio ma non fra titolari e
+            // riserve ha una riga Doppio1/Doppio2 (fzRigheSoloDoppio, come
+            // DoppioSoloLogica sul PC); le altre righe "solo doppio" si tolgono.
+            const solo = fzRigheSoloDoppio(sq);
+            const voluti = Object.fromEntries([
+                ...fz.ruoli.map(r => [r, sq.posti[r] || null]),
+                ...RUOLI_DOPPIO.map((r, i) => [r, solo[i] || null])]);
+            for (const ruolo of Object.keys(voluti)) {
                 const sue = righeSq.filter(r => r.ruolo === ruolo);
                 const vive = sue.filter(r => !r.eliminato);
-                const voluto = sq.posti[ruolo] || null;
+                const voluto = voluti[ruolo];
                 if (!voluto) {
                     for (const r of vive) scritture.push({ t: 'formazioni', riga: { ...r, eliminato: true } });
                     continue;
@@ -381,4 +420,35 @@ async function fzSalva() {
         console.error(e);
         msg('Errore nel salvataggio: ' + (e.message || e));
     } finally { const b = $('#fzSalva'); if (b) b.disabled = false; }
+}
+
+// 12/11: atleti della societa' di `sq` gia' impegnati in un'altra sua
+// squadra nella stagione del campionato: in rosa, o schierati a referto
+// (titolari, riserve, sostituti). Solo campionati dello stesso tipo
+// (femminile con femminile: rsFemminile in comune.js). Set di uid atleta.
+async function fzImpegnatiAltrove(sq, camp) {
+    const [squadre, campionati, rose, formazioni] = await Promise.all(['squadre', 'campionati', 'atleti_squadre', 'formazioni'].map(tutti));
+    const C = perUid(campionati), fem = rsFemminile(camp.nome);
+    const altre = new Set(squadre.filter(q => q.uid !== sq.uid && q.societa_uid === sq.societa_uid && (() => {
+        const c = C.get(q.campionato_uid);
+        return c && c.stagione === camp.stagione && rsFemminile(c.nome) === fem;
+    })()).map(q => q.uid));
+    const giocatori = new Set([...RUOLI_TITOLARI, ...RUOLI_RISERVE, ...RUOLI_DOPPIO]);
+    const impegnati = new Set();
+    for (const r of rose) if (altre.has(r.squadra_uid) && r.stagione === camp.stagione) impegnati.add(r.atleta_uid);
+    for (const f of formazioni)
+        if (altre.has(f.squadra_uid) && giocatori.has(f.ruolo)) {
+            if (f.atleta_uid) impegnati.add(f.atleta_uid);
+            if (f.sostituito_da_atleta_uid) impegnati.add(f.sostituito_da_atleta_uid);
+        }
+    return impegnati;
+}
+
+// 12/11, CSI Corbillon: chi della coppia del doppio NON e' fra titolari e
+// riserve della squadra, nell'ordine della coppia (-> Doppio1, Doppio2).
+// Stessa regola di DoppioSoloLogica.Ricalcola sul PC.
+function fzRigheSoloDoppio(sq) {
+    if (!fz.doppioLibero) return [];
+    const posti = new Set(fz.ruoli.map(r => sq.posti[r]).filter(Boolean));
+    return [...new Set(sq.doppio.filter(Boolean))].filter(u => !posti.has(u));
 }

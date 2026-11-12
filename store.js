@@ -86,7 +86,8 @@ const FORMULE = {
         partite: [S('A', 'A', 1, 1), S('B', 'B', 1, 2), S('C', 'C', 1, 1), D(2, 1), S('B', 'A', 3, 1), S('A', 'C', 3, 2), S('C', 'B', 3, 1)] },
     CSIFormula: { titolari: 3, riserve: 2, doppio: null, punti: 'vinte', dueTavoli: false,
         partite: [S('A', 'A', 1), S('B', 'B', 1), S('C', 'C', 1), S('B', 'A', 2), S('A', 'C', 2), S('C', 'B', 2)] },
-    CsiCorbillon: { titolari: 2, riserve: 2, doppio: 'libero', punti: 'vinte', dueTavoli: true,
+    // 12/11 (art. 2A 2026/27): UNA riserva; il doppio fra tutti (righe Doppio1/2)
+    CsiCorbillon: { titolari: 2, riserve: 1, doppio: 'libero', doppioDaTutti: true, punti: 'vinte', dueTavoli: true,
         partite: [S('A', 'A', 1, 1), S('B', 'B', 1, 2), D(2, 1), S('A', 'B', 3, 1), S('B', 'A', 3, 2)] }
 };
 // Partite da vincere per chiudere l'incontro (FormulaGioco.PartitePerChiudere)
