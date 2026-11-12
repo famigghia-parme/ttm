@@ -183,6 +183,9 @@ viste.account = {
       <button class="pieno" id="acSync">Sincronizza ora</button>
       ${avvisi}
       <div id="msg"></div>
+      <button class="pieno chiaro" id="acRicarica" style="margin-top:24px">🔄 Ricarica i file dell'app</button>
+      <p><small>Riscarica l'app dal sito anche se il numero di versione non è cambiato (per le prove).
+        Login, dati e modifiche da inviare restano. Serve la rete.</small></p>
       ${altro ? `<button class="pieno chiaro" id="acAmbiente" style="margin-top:24px">Passa all'ambiente ${altro === 'prova' ? 'PROVA' : 'REALE'}</button>` : ''}
       <button class="pieno chiaro" id="acEsci" style="margin-top:24px">Esci</button>`;
         // Sempre una risposta visibile: senza, non si capisce se il pulsante ha fatto qualcosa
@@ -203,8 +206,44 @@ viste.account = {
             cambiaAmbiente(altro);
         };
         $('#acEsci').onclick = esci;
+        $('#acRicarica').onclick = ricaricaApp;
     }
 };
+
+// 12/11 (1.4.1): "Ricarica i file dell'app". Se sul sito c'e' un sw.js
+// diverso parte quello (come il banner "aggiorna"); altrimenti il service
+// worker attuale riscarica i file nella sua cache (sw.js: 'ricarica') e la
+// pagina si ricarica. I dati (IndexedDB, login) non si toccano.
+async function ricaricaApp() {
+    const b = $('#acRicarica');
+    if (!navigator.onLine) { avviso('Serve la rete per ricaricare i file dell\'app'); return; }
+    const reg = 'serviceWorker' in navigator ? await navigator.serviceWorker.getRegistration() : null;
+    if (!reg?.active) { location.reload(); return; }          // niente service worker: basta ricaricare
+    if (b) b.disabled = true;
+    avviso('Ricarico i file dell\'app…', true);
+    try {
+        await reg.update();
+        const nuovo = reg.installing;
+        if (nuovo) await new Promise(fatto => {
+            const t = setTimeout(fatto, 30000);
+            nuovo.addEventListener('statechange', () => { if (nuovo.state !== 'installing') { clearTimeout(t); fatto(); } });
+        });
+        // sw.js nuovo: si attiva e 'controllerchange' ricarica la pagina (registraSw)
+        if (reg.waiting) { reg.waiting.postMessage('aggiorna'); return; }
+        const esito = await new Promise(fatto => {
+            const canale = new MessageChannel();
+            // un service worker di prima della 1.4.1 non risponde
+            const t = setTimeout(() => fatto('il service worker non risponde (versione precedente alla 1.4.1?)'), 30000);
+            canale.port1.onmessage = m => { clearTimeout(t); fatto(m.data); };
+            reg.active.postMessage('ricarica', [canale.port2]);
+        });
+        if (esito !== true) throw new Error(esito);
+        location.reload();
+    } catch (e) {
+        avviso('File dell\'app non ricaricati: ' + (e.message || e));
+        if (b) b.disabled = false;
+    }
+}
 
 async function esci() {
     const n = await contaInAttesa();

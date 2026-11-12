@@ -5,7 +5,7 @@
 // mostra "Nuova versione disponibile".
 // Le chiamate a Supabase non passano da qui (altro dominio).
 
-const VERSIONE = '1.4.0';
+const VERSIONE = '1.4.1';
 const CACHE = 'ttm-' + VERSIONE;
 
 // Tutti i file caricati con ?v= da index.html (script e foglio di stile)
@@ -49,7 +49,29 @@ self.addEventListener('activate', e => {
     })());
 });
 
-self.addEventListener('message', e => { if (e.data === 'aggiorna') self.skipWaiting(); });
+// 'aggiorna': parte la versione nuova in attesa (banner giallo).
+// 'ricarica' (12/11, 1.4.1): "Ricarica i file dell'app" in Account. Riscarica
+// dalla rete i file dell'app nella cache di QUESTA versione, anche se il
+// numero non e' cambiato (prove). Tutto o niente: prima si scaricano tutti,
+// poi si sostituiscono; se uno non arriva non si tocca nulla. Risposta sulla
+// porta del messaggio: true oppure il testo dell'errore.
+self.addEventListener('message', e => {
+    if (e.data === 'aggiorna') self.skipWaiting();
+    else if (e.data === 'ricarica') {
+        const porta = e.ports && e.ports[0];
+        e.waitUntil(ricaricaFile().then(() => porta?.postMessage(true), err => porta?.postMessage(String(err?.message || err))));
+    }
+});
+
+async function ricaricaFile() {
+    const scaricati = await Promise.all(FILE.map(async f => {
+        const r = await fetch(new Request(f, { cache: 'reload' }));
+        if (!r.ok) throw new Error(`${f}: risposta ${r.status}`);
+        return [f, r];
+    }));
+    const c = await caches.open(CACHE);
+    for (const [f, r] of scaricati) await c.put(f, r);
+}
 
 self.addEventListener('fetch', e => {
     const req = e.request;
