@@ -371,14 +371,51 @@ function clHtml(gruppi) {
         .map(g => [g.tipo || '', g.campionato || '', g.girone || ''].join('|')));
     const testa = `<li class="clRiga clTesta"><span>#</span><span>Squadra</span><span>Pt</span>
         <span>G</span><span>V</span><span>N</span><span>P</span><span>Partite</span></li>`;
-    const riga = r => `<li class="clRiga${r.nostra ? ' nostra' : ''}">
+    // 12/11 (1.4.2): un tocco sulla squadra apre i suoi incontri (clSquadraHtml)
+    const riga = r => `<li class="clRiga cliccabile${r.nostra ? ' nostra' : ''}" data-sq="${esc(String(r.id ?? ''))}">
         <span>${r.posizione}</span>
         <span class="clSq">${htmlNomeSquadra(r.squadra)}${r.sorteggio ? '<small>sorteggio</small>' : ''}</span>
         <b>${r.punti}</b><span>${r.giocati}</span><span>${r.vinti}</span><span>${r.pari}</span><span>${r.persi}</span>
         <span>${r.partiteVinte}-${r.partitePerse}</span></li>`;
-    return `<div class="lvInfo">Pt punti · G giocati · V vinti · N pari · P persi · Partite vinte-perse</div>
+    return `<div class="lvInfo">Pt punti · G giocati · V vinti · N pari · P persi · Partite vinte-perse.
+        Tocca una squadra per vederne gli incontri.</div>
       ${htmlGruppi('classifica', voci, riga, testa, g => nostri.has(g.k))}
       ${voci.some(r => r.sorteggio) ? '<div class="lvInfo">"sorteggio" = squadre a pari merito su tutti i criteri del regolamento: decide il sorteggio.</div>' : ''}`;
+}
+
+// ---------------- incontri di una squadra (12/11, 1.4.2) ----------------
+// Un tocco su una squadra della classifica: i suoi incontri nel campionato,
+// come il "Riassunto" del PC (doppio clic in Classifica). Prima i giocati,
+// con risultato visto dalla squadra (V/N/P scritto, non solo colorato) e
+// punti in classifica, poi quelli da giocare; sopra i totali. Un tocco su
+// un incontro apre la sua scheda. Stesso disegno nelle due PWA:
+//   sq = { nome, nostra }
+//   incontri = [{ id, giornata, quando (testo), ordine (per ordinare),
+//                 inCasa, avversaria, miei, suoi, punti, terminato }]
+function clSquadraHtml(sq, incontri) {
+    const ord = (a, b) => (a.giornata ?? 999) - (b.giornata ?? 999) || String(a.ordine ?? '').localeCompare(String(b.ordine ?? ''));
+    const giocati = incontri.filter(i => i.terminato).sort(ord);
+    const daGiocare = incontri.filter(i => !i.terminato).sort(ord);
+    const esito = i => (i.miei ?? 0) > (i.suoi ?? 0) ? 'V' : (i.miei ?? 0) < (i.suoi ?? 0) ? 'P' : 'N';
+    const t = { v: 0, n: 0, p: 0, pt: 0, pv: 0, pp: 0 };
+    for (const i of giocati) {
+        const e = esito(i);
+        if (e === 'V') t.v++; else if (e === 'P') t.p++; else t.n++;
+        t.pt += i.punti ?? 0; t.pv += i.miei ?? 0; t.pp += i.suoi ?? 0;
+    }
+    const voce = i => `
+      <li class="atleta cliccabile clInc${i.terminato ? ' giocato' : ''}" data-inc="${esc(String(i.id))}">
+        <b>${i.giornata ? 'G' + esc(String(i.giornata)) + ' · ' : ''}${i.inCasa ? '🏠' : '🚌'} ${esc(i.avversaria)}</b>
+        ${i.terminato ? `<span><b class="clEsito clEsito${esito(i)}">${esito(i)}</b> ${i.miei ?? '-'}-${i.suoi ?? '-'} · ${i.punti ?? 0} pt</span>` : ''}<br>
+        <small>${esc(i.quando || 'data da definire')} · ${i.inCasa ? 'in casa' : 'in trasferta'}</small>
+      </li>`;
+    return `<button class="pieno chiaro" id="clIndietro">← Classifica</button>
+      <h3 class="clTitolo${sq.nostra ? ' nostra' : ''}">${sq.nostra ? '★ ' : ''}${esc(sq.nome)}</h3>
+      <div class="lvInfo">Giocati ${giocati.length} · V ${t.v} · N ${t.n} · P ${t.p} · <b>${t.pt} punti</b> · partite ${t.pv}-${t.pp}</div>
+      ${giocati.length ? `<div class="lvSceltaTit">Giocati</div><ul>${giocati.map(voce).join('')}</ul>` : ''}
+      ${daGiocare.length ? `<div class="lvSceltaTit">Da giocare</div><ul>${daGiocare.map(voce).join('')}</ul>` : ''}
+      ${incontri.length ? '' : '<p class="vuoto">Nessun incontro in calendario</p>'}
+      <div class="lvInfo">V vinto · N pari · P perso · 🏠 in casa · 🚌 in trasferta. Tocca un incontro per aprirlo.</div>`;
 }
 
 // ---------------- tornei ----------------

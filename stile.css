@@ -320,3 +320,12 @@ small.dsBreve { display: block; color: #333; }
   color: inherit; text-align: left; cursor: pointer; text-decoration: underline; }
 .inDove button.calData small { font-weight: 400; }
 .calBox { margin: 6px 0; }
+
+/* 12/11 (1.4.2): incontri di una squadra dalla classifica. L'esito e' la
+   LETTERA (V/N/P) in un riquadro: il colore aiuta soltanto */
+.clEsito { display: inline-block; min-width: 1.5em; text-align: center; border: 1px solid var(--bordo);
+  border-radius: 4px; font-weight: 700; color: #222; }
+.clEsitoV { background: #c8e6c9; }
+.clEsitoN { background: #eeeeee; }
+.clEsitoP { background: #ffcdd2; }
+h3.clTitolo.nostra { border-left: 6px solid var(--verde); padding-left: 8px; }

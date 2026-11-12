@@ -8,6 +8,8 @@
 // test-classifica.js lo confronta riga per riga con classifica.json
 // (generato dal C#): se cambia Classifica.cs va cambiato anche qui.
 // Il disegno (clHtml) sta in comune.js, uguale alla PWA in rete locale.
+// Dal 12/11 (1.4.2) un tocco su una squadra mostra i suoi incontri
+// (clSquadraHtml), e da li' la scheda di ciascuno.
 
 // Criteri di spareggio: i nomi sono quelli di CriterioSpareggio sul PC.
 // Art. 2-3 FITET: punti negli scontri diretti, poi QUOZIENTI di partite,
@@ -234,15 +236,64 @@ async function clGruppi() {
     return gruppi;
 }
 
+// ---------------- incontri di una squadra (12/11, 1.4.2) ----------------
+// Tutti gli incontri della squadra nel suo campionato, dai dati locali, per
+// clSquadraHtml (comune.js). null = squadra non trovata.
+async function clIncontriSquadra(uid) {
+    const [sq, gio, inc] = await Promise.all(['squadre', 'giornate', 'incontri'].map(tutti));
+    const S = perUid(sq), G = perUid(gio);
+    const s = S.get(uid);
+    if (!s) return null;
+    const incontri = inc
+        .filter(i => (i.squadra_casa_uid === uid || i.squadra_ospite_uid === uid) && G.get(i.giornata_uid)?.campionato_uid === s.campionato_uid)
+        .map(i => {
+            const inCasa = i.squadra_casa_uid === uid;
+            return {
+                id: i.uid, giornata: G.get(i.giornata_uid)?.numero, quando: i.data_ora ? dataBreve(i.data_ora) : '', ordine: i.data_ora || '',
+                inCasa, avversaria: S.get(inCasa ? i.squadra_ospite_uid : i.squadra_casa_uid)?.nome ?? '?',
+                miei: inCasa ? i.punti_casa : i.punti_ospite, suoi: inCasa ? i.punti_ospite : i.punti_casa,
+                punti: inCasa ? i.punti_class_casa : i.punti_class_ospite, terminato: i.stato === 'Terminato'
+            };
+        });
+    return { sq: { nome: s.nome, nostra: !!s.nostra_squadra }, incontri };
+}
+
 // ---------------- vista ----------------
+let clSquadra = null;     // uid della squadra di cui si vedono gli incontri (12/11)
+let clRiapri = null;      // tornando da una scheda: la squadra da riaprire
+
+async function clElenco() {
+    clSquadra = null;
+    const c = $('#clCorpo');
+    if (!c) return;
+    c.innerHTML = clHtml(await clGruppi());
+    agganciaGruppi('classifica', c);
+    c.querySelectorAll('li.clRiga[data-sq]').forEach(li => li.onclick = () => clApriSquadra(li.dataset.sq));
+}
+
+async function clApriSquadra(uid) {
+    const c = $('#clCorpo');
+    if (!c) return;
+    const d = await clIncontriSquadra(uid);
+    if (!d) { clElenco(); return; }
+    const primaVolta = clSquadra !== uid;
+    clSquadra = uid;
+    c.innerHTML = clSquadraHtml(d.sq, d.incontri);
+    if (primaVolta) window.scrollTo(0, 0);
+    $('#clIndietro').onclick = clElenco;
+    // la scheda dell'incontro: "indietro" torna qui
+    c.querySelectorAll('li[data-inc]').forEach(li => li.onclick = () =>
+        inApriDa(li.dataset.inc, d.sq.nome, () => { clRiapri = uid; mostra('classifica'); }));
+}
+
 if (typeof viste !== 'undefined') viste.classifica = {
     html: '<div id="clCorpo"></div>',
-    init: async () => {
-        const c = $('#clCorpo');
-        if (!c) return;
-        c.innerHTML = clHtml(await clGruppi());
-        agganciaGruppi('classifica', c);
+    init: () => {
+        const da = clRiapri;
+        clRiapri = null;
+        clSquadra = null;
+        return da ? clApriSquadra(da) : clElenco();
     },
     // Dati nuovi dal cloud (un risultato appena arrivato): si ridisegna
-    suDati: () => viste.classifica.init()
+    suDati: () => clSquadra ? clApriSquadra(clSquadra) : clElenco()
 };

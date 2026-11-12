@@ -13,6 +13,13 @@
 
 let inTutti = false, inPassate = false, inAperto = null;
 let inModo = 'incontri';        // 'incontri' oppure 'punti': quale sezione e' aperta
+// 12/11 (1.4.2): scheda aperta da un'altra sezione (Classifica): "indietro"
+// torna li' (inRitorno = { etichetta, vai }) invece che all'elenco
+let inDaAprire = null, inRitorno = null;
+function inApriDa(uid, etichetta, vai) {
+    inDaAprire = { uid, etichetta, vai };
+    mostra('incontri');
+}
 try {
     inTutti = localStorage.getItem('ttm.tuttiIncontri') === '1';
     inPassate = localStorage.getItem('ttm.passateIncontri') === '1';
@@ -20,7 +27,13 @@ try {
 
 const inVista = modo => ({
     html: '<div id="inCorpo"></div>',
-    init: () => { inModo = modo; inAperto = null; fz = null; fzModificata = false; fzRitorno = null; rf = null; rfModificata = false; ds = null; lvLascia(); inElenco(); },
+    init: () => {
+        inModo = modo; inAperto = null; fz = null; fzModificata = false; fzRitorno = null; rf = null; rfModificata = false; ds = null; lvLascia();
+        const da = modo === 'incontri' ? inDaAprire : null;
+        inDaAprire = null;
+        inRitorno = da ? { etichetta: da.etichetta, vai: da.vai } : null;
+        if (da) inScheda(da.uid); else inElenco();
+    },
     // Si passa a un'altra vista (Rosa, Atleti, Account): i Punti si chiudono.
     esci: () => lvLascia(),
     // Punti aperti: si ridisegnano dai dati locali (solo se e' cambiato
@@ -182,7 +195,7 @@ async function inScheda(uid) {
     // Disponibilita': solo per le gare delle nostre squadre non ancora giocate
     const chiCe = x.nostro && !x.terminato ? await dsBreve(uid) : '';
     c.innerHTML = `
-      <button class="pieno chiaro" id="inIndietro">${inModo === 'punti' ? '← Punti' : '← Incontri'}</button>
+      <button class="pieno chiaro" id="inIndietro">${inRitorno ? '← ' + esc(inRitorno.etichetta) : inModo === 'punti' ? '← Punti' : '← Incontri'}</button>
       <div class="lvTesta">${htmlNomeSquadra(x.casa?.nome)}
         <span class="lvTot">${pc ?? '-'} – ${po ?? '-'}<small class="lvEtic">partite</small></span>
         ${htmlNomeSquadra(x.ospite?.nome)}</div>
@@ -209,7 +222,7 @@ async function inScheda(uid) {
       <h4>Formazioni</h4>${squadra(x.casa, true)}${squadra(x.ospite, false)}
       <h4>Dati del referto</h4>${rfHtmlRiepilogo(rfDaIncontro(i, x.casa))}`;
 
-    $('#inIndietro').onclick = inElenco;
+    $('#inIndietro').onclick = inRitorno ? () => { const r = inRitorno; inRitorno = null; r.vai(); } : inElenco;
     agganciaDoveQuando(c);
     const bp = $('#inPunti');
     if (bp) bp.onclick = () => lvApri(uid);
