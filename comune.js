@@ -1070,11 +1070,62 @@ if (typeof module !== 'undefined' && module.exports) module.exports = { caCalcol
 // Scheda di un incontro da giocare: giorno e ora, luogo e il link a Google
 // Maps (sul telefono apre l'app). Senza rete il link non va, ma l'indirizzo
 // resta scritto. Uguale nelle due PWA.
+// Toccando la data (se c'e') si aprono due link per metterla in agenda:
+// Google Calendar (Android, o chi lo usa) e il file .ics (iPhone: Safari
+// propone "Aggiungi al calendario"; altrove si scarica e si apre). Sono
+// LINK veri e non finestre aperte dal programma: i telefoni bloccano le
+// pagine aperte dopo un'attesa. Durata presunta: DURATA_GARA_ORE.
+const DURATA_GARA_ORE = 3;
 function urlMappa(luogo) {
     return 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(luogo);
 }
-function htmlDoveQuando(quando, luogo) {
-    return `<div class="lvInfo inDove"><b>📅 ${esc(quando || 'data da definire')}</b><br>
+// Data e ora LOCALI come le vuole il calendario: 20261115T153000
+function calOra(d) {
+    const z = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}${z(d.getMonth() + 1)}${z(d.getDate())}T${z(d.getHours())}${z(d.getMinutes())}00`;
+}
+// ev = { iso, titolo, luogo, note }  ->  { google, ics } (null senza data valida)
+function calLink(ev) {
+    const inizio = ev?.iso ? new Date(ev.iso) : null;
+    if (!inizio || isNaN(inizio)) return null;
+    const fine = new Date(inizio.getTime() + DURATA_GARA_ORE * 3600000);
+    const google = 'https://calendar.google.com/calendar/render?action=TEMPLATE' +
+        '&text=' + encodeURIComponent(ev.titolo || '') +
+        '&dates=' + calOra(inizio) + '/' + calOra(fine) + '&ctz=Europe/Rome' +
+        (ev.luogo ? '&location=' + encodeURIComponent(ev.luogo) : '') +
+        (ev.note ? '&details=' + encodeURIComponent(ev.note) : '');
+    // .ics: ora "fluttuante" (senza fuso) = l'ora del telefono, cioe' la nostra
+    const t = s => String(s || '').replace(/[\\;,]/g, m => '\\' + m).replace(/\r?\n/g, '\\n');
+    const righe = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//TennisTavoloManager//IT', 'BEGIN:VEVENT',
+        'UID:' + calOra(inizio) + '-' + encodeURIComponent(ev.titolo || '').slice(0, 40) + '@ttm',
+        'DTSTAMP:' + new Date().toISOString().replace(/[-:]/g, '').slice(0, 15) + 'Z', 'DTSTART:' + calOra(inizio), 'DTEND:' + calOra(fine),
+        'SUMMARY:' + t(ev.titolo)];
+    if (ev.luogo) righe.push('LOCATION:' + t(ev.luogo));
+    if (ev.note) righe.push('DESCRIPTION:' + t(ev.note));
+    righe.push('END:VEVENT', 'END:VCALENDAR');
+    return { google, ics: 'data:text/calendar;charset=utf-8,' + encodeURIComponent(righe.join('\r\n')) };
+}
+// iPhone/iPad: il file .ics si APRE (Safari propone il calendario); con
+// "download" finirebbe in File. Altrove si scarica.
+function calIos() {
+    return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+function htmlDoveQuando(quando, luogo, ev = null) {
+    const cal = calLink(ev);
+    const data = `📅 ${esc(quando || 'data da definire')}`;
+    return `<div class="lvInfo inDove">${cal
+            ? `<button type="button" class="calData" id="inCal" aria-expanded="false">${data} <small>· aggiungi al calendario</small></button>
+               <div class="calBox" id="inCalBox" hidden>
+                 <a class="pieno chiaro" id="inCalGoogle" target="_blank" rel="noopener" href="${esc(cal.google)}">Google Calendar</a>
+                 <a class="pieno chiaro" id="inCalIcs" href="${esc(cal.ics)}"${calIos() ? '' : ' download="gara.ics"'}>Calendario del telefono (iPhone, file .ics)</a>
+               </div>`
+            : `<b>${data}</b>`}<br>
         📍 ${luogo ? esc(luogo) : 'luogo non indicato'}</div>` +
         (luogo ? `<a class="pieno chiaro" id="inMappa" target="_blank" rel="noopener" href="${esc(urlMappa(luogo))}">🗺️ Apri in Google Maps</a>` : '');
+}
+// Da chiamare dopo aver messo htmlDoveQuando nella pagina: la data apre e
+// chiude i due link del calendario.
+function agganciaDoveQuando(c) {
+    const b = c.querySelector('#inCal'), box = c.querySelector('#inCalBox');
+    if (b && box) b.onclick = () => { box.hidden = !box.hidden; b.setAttribute('aria-expanded', String(!box.hidden)); };
 }

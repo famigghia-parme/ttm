@@ -314,3 +314,9 @@ li.dsRiga.io { background: #e8f5e9; border-left-color: var(--verde); }
 .dsScelta button[data-r="NonSo"].att { background: #666; border-color: #666; }
 /* riassunto sotto un incontro dei "Prossimi" e nella scheda */
 small.dsBreve { display: block; color: #333; }
+
+/* 12/11 (1.4.0): la data della gara apre "aggiungi al calendario" */
+.inDove button.calData { background: none; border: 0; padding: 0; margin: 0; font: inherit; font-weight: 700;
+  color: inherit; text-align: left; cursor: pointer; text-decoration: underline; }
+.inDove button.calData small { font-weight: 400; }
+.calBox { margin: 6px 0; }

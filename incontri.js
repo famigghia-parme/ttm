@@ -191,7 +191,8 @@ async function inScheda(uid) {
             // 12/11 (1.4.0): da giocare = le cose nell'ordine in cui si fanno:
             // dove e quando, chi c'e', formazione, scarico, punti, referto, PDF
             : `<div class="lvInfo">${esc(x.c.nome)}</div>
-        ${htmlDoveQuando(i.data_ora ? dataBreve(i.data_ora) : '', OSquadra.luogo(i, x.casa))}
+        ${htmlDoveQuando(i.data_ora ? dataBreve(i.data_ora) : '', OSquadra.luogo(i, x.casa),
+            { iso: i.data_ora, titolo: `🏓 ${x.casa?.nome ?? ''} – ${x.ospite?.nome ?? ''}`, luogo: OSquadra.luogo(i, x.casa), note: x.c.nome })}
         ${x.nostro ? `<button class="pieno" id="inDisponibilita">🙋 Disponibilità</button>
         <div class="lvInfo" id="inChiCe">${chiCe ? 'Chi c\'è: ' + esc(chiCe) : 'Chi c\'è per questa gara: lo dice ogni giocatore dal suo telefono.'}</div>` : ''}
         <button class="pieno" id="inFormazione">✏️ Formazione</button>
@@ -209,6 +210,7 @@ async function inScheda(uid) {
       <h4>Dati del referto</h4>${rfHtmlRiepilogo(rfDaIncontro(i, x.casa))}`;
 
     $('#inIndietro').onclick = inElenco;
+    agganciaDoveQuando(c);
     const bp = $('#inPunti');
     if (bp) bp.onclick = () => lvApri(uid);
     const bf = $('#inFormazione');
