@@ -200,12 +200,14 @@ async function inScheda(uid) {
         <span class="lvTot">${pc ?? '-'} – ${po ?? '-'}<small class="lvEtic">partite</small></span>
         ${htmlNomeSquadra(x.ospite?.nome)}</div>
       ${x.terminato
-            ? `<div class="lvInfo">${esc([dataBreve(i.data_ora), x.c.nome, OSquadra.luogo(i, x.casa)].filter(Boolean).join(' · '))}</div>`
+            ? `<div class="lvInfo">${esc([dataBreve(i.data_ora), x.c.nome, OSquadra.luogo(i, x.casa)].filter(Boolean).join(' · '))}</div>
+        ${htmlUfficiale(i.url_ufficiale)}`
             // 12/11 (1.4.0): da giocare = le cose nell'ordine in cui si fanno:
             // dove e quando, chi c'e', formazione, scarico, punti, referto, PDF
             : `<div class="lvInfo">${esc(x.c.nome)}</div>
         ${htmlDoveQuando(i.data_ora ? dataBreve(i.data_ora) : '', OSquadra.luogo(i, x.casa),
-            { iso: i.data_ora, titolo: `🏓 ${x.casa?.nome ?? ''} – ${x.ospite?.nome ?? ''}`, luogo: OSquadra.luogo(i, x.casa), note: x.c.nome })}
+            { iso: i.data_ora, titolo: `🏓 ${x.casa?.nome ?? ''} – ${x.ospite?.nome ?? ''}`, luogo: OSquadra.luogo(i, x.casa), note: x.c.nome },
+            i.url_ufficiale)}
         ${x.nostro ? `<button class="pieno" id="inDisponibilita">🙋 Disponibilità</button>
         <div class="lvInfo" id="inChiCe">${chiCe ? 'Chi c\'è: ' + esc(chiCe) : 'Chi c\'è per questa gara: lo dice ogni giocatore dal suo telefono.'}</div>` : ''}
         <button class="pieno" id="inFormazione">✏️ Formazione</button>

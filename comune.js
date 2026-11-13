@@ -1150,7 +1150,14 @@ function calLink(ev) {
 function calIos() {
     return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 }
-function htmlDoveQuando(quando, luogo, ev = null) {
+// 13/11: la pagina che fa fede (calendario del girone FITET, pagina del girone
+// CSI), per controllare variazioni dell'ultimo minuto. Solo indirizzi web.
+function htmlUfficiale(url) {
+    if (!/^https?:\/\//i.test(url || '')) return '';
+    const dove = /fitet\.org/i.test(url) ? 'portale FITET' : 'sito CSI';
+    return `<a class="pieno chiaro" id="inUfficiale" target="_blank" rel="noopener" href="${esc(url)}">🔎 Controlla sulla pagina ufficiale (${dove})</a>`;
+}
+function htmlDoveQuando(quando, luogo, ev = null, ufficiale = null) {
     const cal = calLink(ev);
     const data = `📅 ${esc(quando || 'data da definire')}`;
     return `<div class="lvInfo inDove">${cal
@@ -1161,7 +1168,8 @@ function htmlDoveQuando(quando, luogo, ev = null) {
                </div>`
             : `<b>${data}</b>`}<br>
         📍 ${luogo ? esc(luogo) : 'luogo non indicato'}</div>` +
-        (luogo ? `<a class="pieno chiaro" id="inMappa" target="_blank" rel="noopener" href="${esc(urlMappa(luogo))}">🗺️ Apri in Google Maps</a>` : '');
+        (luogo ? `<a class="pieno chiaro" id="inMappa" target="_blank" rel="noopener" href="${esc(urlMappa(luogo))}">🗺️ Apri in Google Maps</a>` : '') +
+        htmlUfficiale(ufficiale);
 }
 // Da chiamare dopo aver messo htmlDoveQuando nella pagina: la data apre e
 // chiude i due link del calendario.
