@@ -8,6 +8,8 @@
 //  - la tendina delle societa' e' raggruppata: le nostre, poi FITET, poi CSI;
 //  - accanto all'atleta compaiono categoria e punti FITET quando ci sono
 //    (chi non e' tesserato FITET non li ha: non compare nulla).
+// 13/11 (1.4.7): un tocco sull'atleta mostra i suoi incontri e partite
+// (paCalcola qui sotto, disegno paHtml in comune.js), con il filtro stagione.
 
 let atSoc = '';                 // '' = tutte le societa'
 try { atSoc = localStorage.getItem('ttm.societa') || ''; } catch { }
@@ -17,6 +19,7 @@ const AT_MAX = 80;              // oltre, si chiede di scrivere qualche lettera 
 
 viste.atleti = {
     html: `
+      <div id="atElenco">
       <select id="selSoc"></select>
       <div id="socInfo" class="lvInfo"></div>
       <input id="cerca" type="search" placeholder="Cerca cognome e nome…" autocomplete="off">
@@ -35,9 +38,11 @@ viste.atleti = {
           <button type="submit" id="btnSalva" class="pieno">Salva</button>
         </div>
       </form>
-      <ul id="lista"></ul>`,
+      <ul id="lista"></ul>
+      </div>
+      <div id="paCorpo" hidden></div>`,
     init: atInit,
-    suDati: () => { if ($('#frmNuovo')?.hidden) atCarica(); }
+    suDati: () => { if (paAperto) paApri(paAperto.uid, paAperto.stagione); else if ($('#frmNuovo')?.hidden) atCarica(); }
 };
 
 // Per confrontare senza badare a maiuscole e accenti ("Niccolo'" trova "Niccolò")
@@ -75,7 +80,10 @@ async function atInit() {
     };
     $('#btnAnnulla').onclick = () => { $('#frmNuovo').reset(); $('#frmNuovo').hidden = true; msg(''); };
     $('#frmNuovo').onsubmit = atSalva;
+    // 13/11 (1.4.7): un tocco sull'atleta = i suoi incontri e partite
+    $('#lista').onclick = e => { const li = e.target.closest('li.atleta[data-uid]'); if (li) paApri(li.dataset.uid); };
     atCarica();
+    if (paRiapri) { const r = paRiapri; paRiapri = null; paApri(r.uid, r.stagione); }
 }
 
 // Una riga per TESSERAMENTO della stagione (atleta + societa'): lo stesso
@@ -133,7 +141,7 @@ function atDisegna() {
         if (!atSoc) sotto.push(r.s ? `${r.s.nome} (${federazione(r.s.tipo)})` : 'non tesserato in questa stagione');
         if (r.categoria != null) sotto.push('cat ' + r.categoria);
         if (r.punti != null) sotto.push(r.punti + ' pti');
-        return `<li class="atleta" data-uid="${r.a.uid}"><b>${esc(r.a.cognome)}</b> ${esc(r.a.nome)}
+        return `<li class="atleta cliccabile" data-uid="${r.a.uid}"><b>${esc(r.a.cognome)}</b> ${esc(r.a.nome)}
           <span>${esc({ 1: 'M', 2: 'F' }[r.a.sesso] || '-')} · ${esc(r.tessera || '—')}</span>
           ${sotto.length ? `<br><small>${esc(sotto.join(' · '))}</small>` : ''}</li>`;
     }).join('') + (troppi ? `<li class="vuoto">…e altri ${troppi}: scrivi qualche lettera in più.</li>` : '');
@@ -172,4 +180,78 @@ async function atSalva(e) {
     f.reset(); f.hidden = true; msg('');
     await atCarica();
     avviso(`${cognome} ${nome} aggiunto ✓`, true);
+}
+
+// ---------------- incontri e partite di un atleta (13/11, 1.4.7) ----------------
+// Stessa regola di PartiteAtletaLogica.cs sul PC: solo le partite giocate
+// (chiuse o con dei set) con l'atleta scritto, dal suo punto di vista.
+// stagione: null = quella corrente, '' = tutte.
+let paAperto = null;     // { uid, stagione } dell'atleta aperto
+let paRiapri = null;     // tornando dalla scheda di un incontro
+
+async function paCalcola(uid, stagione) {
+    const [atleti, partite, incontri, giornate, campionati, squadre] =
+        await Promise.all(['atleti', 'partite', 'incontri', 'giornate', 'campionati', 'squadre'].map(tutti));
+    const A = perUid(atleti), I = perUid(incontri), G = perUid(giornate), C = perUid(campionati), S = perUid(squadre);
+    const a = A.get(uid);
+    if (!a) return null;
+    const nome = u => u ? (nomeAtleta(A.get(u)) || '?') : '';
+    const perInc = new Map();
+    for (const p of partite) {
+        const casa = p.atleta_casa1_uid === uid || p.atleta_casa2_uid === uid;
+        const osp = p.atleta_ospite1_uid === uid || p.atleta_ospite2_uid === uid;
+        if (!casa && !osp) continue;
+        if (!p.completata && !p.set_vinti_casa && !p.set_vinti_ospite) continue;
+        const i = I.get(p.incontro_uid);
+        if (!i) continue;
+        const compagno = casa ? (p.atleta_casa1_uid === uid ? p.atleta_casa2_uid : p.atleta_casa1_uid)
+            : (p.atleta_ospite1_uid === uid ? p.atleta_ospite2_uid : p.atleta_ospite1_uid);
+        const lato = (u, testo) => u ? nome(u) : String(testo || '').trim();
+        const avv = (casa ? [lato(p.atleta_ospite1_uid, p.avversario_ospite1), lato(p.atleta_ospite2_uid, p.avversario_ospite2)]
+            : [lato(p.atleta_casa1_uid), lato(p.atleta_casa2_uid)]).filter(Boolean).join(' / ');
+        if (!perInc.has(i.uid)) perInc.set(i.uid, { i, casa, partite: [] });
+        perInc.get(i.uid).partite.push({
+            ordine: p.ordine, doppio: p.tipo === 'Doppio', compagno: compagno ? nome(compagno) : null, avversari: avv || '?',
+            nostri: casa ? p.set_vinti_casa : p.set_vinti_ospite, loro: casa ? p.set_vinti_ospite : p.set_vinti_casa,
+            vinta: p.completata && p.vinta_da_casa != null ? p.vinta_da_casa === casa : null
+        });
+    }
+    const tuttiInc = [...perInc.values()].map(({ i, casa, partite }) => {
+        const c = C.get(G.get(i.giornata_uid)?.campionato_uid);
+        return {
+            id: i.uid, data: i.data_ora || '', quando: i.data_ora ? dataBreve(i.data_ora) : '',
+            campionato: c?.nome ?? '', stagione: c?.stagione ?? '',
+            squadra: S.get(casa ? i.squadra_casa_uid : i.squadra_ospite_uid)?.nome ?? '?',
+            avversaria: S.get(casa ? i.squadra_ospite_uid : i.squadra_casa_uid)?.nome ?? '?',
+            inCasa: casa, partite: partite.sort((x, y) => x.ordine - y.ordine)
+        };
+    }).sort((x, y) => String(y.data).localeCompare(String(x.data)));
+    const corrente = await stagioneCorrente();
+    const stagioni = [...new Set(tuttiInc.map(x => x.stagione).filter(Boolean))].sort().reverse();
+    if (corrente && !stagioni.includes(corrente)) stagioni.unshift(corrente);
+    const scelta = stagione == null ? (corrente || '') : stagione;
+    return { nome: nomeAtleta(a), stagione: scelta, stagioni, incontri: scelta ? tuttiInc.filter(x => x.stagione === scelta) : tuttiInc };
+}
+
+async function paApri(uid, stagione = null) {
+    const d = await paCalcola(uid, stagione);
+    const c = $('#paCorpo');
+    if (!d || !c) return;
+    const primaVolta = paAperto?.uid !== uid;
+    paAperto = { uid, stagione: d.stagione };
+    $('#atElenco').hidden = true;
+    c.hidden = false;
+    c.innerHTML = paHtml(d);
+    if (primaVolta) window.scrollTo(0, 0);
+    $('#paIndietro').onclick = paChiudi;
+    $('#paStagione').onchange = e => paApri(uid, e.target.value === 'tutte' ? '' : e.target.value);
+    c.querySelectorAll('li[data-inc]').forEach(li => li.onclick = () =>
+        inApriDa(li.dataset.inc, d.nome, () => { paRiapri = { ...paAperto }; mostra('atleti'); }));
+}
+
+function paChiudi() {
+    paAperto = null;
+    const c = $('#paCorpo');
+    if (c) { c.hidden = true; c.innerHTML = ''; }
+    if ($('#atElenco')) $('#atElenco').hidden = false;
 }

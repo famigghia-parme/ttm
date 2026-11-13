@@ -329,3 +329,8 @@ small.dsBreve { display: block; color: #333; }
 .clEsitoN { background: #eeeeee; }
 .clEsitoP { background: #ffcdd2; }
 h3.clTitolo.nostra { border-left: 6px solid var(--verde); padding-left: 8px; }
+
+/* 13/11 (1.4.7): partite di un atleta (paHtml in comune.js) */
+.paPartita { margin-top: .25em; font-size: .92em; }
+.paPartita .clEsito { margin-right: .3em; }
+#paStagione { margin: .3em 0; }

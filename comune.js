@@ -1177,3 +1177,45 @@ function agganciaDoveQuando(c) {
     const b = c.querySelector('#inCal'), box = c.querySelector('#inCalBox');
     if (b && box) b.onclick = () => { box.hidden = !box.hidden; b.setAttribute('aria-expanded', String(!box.hidden)); };
 }
+
+// ---------------- partite di un atleta (13/11, 1.4.7) ----------------
+// Gli incontri e le partite giocate da un atleta, stesso disegno nelle due
+// PWA; i dati: via cloud li calcola il telefono (paCalcola in
+// pwa-cloud/atleti.js), in rete locale il PC (/api/atleti/{id}/partite,
+// PartiteAtletaLogica.cs). d = { nome, stagione ('' = tutte), stagioni: [...],
+//   incontri: [ { id, data, quando, campionato, squadra, avversaria, inCasa,
+//     partite: [ { ordine, doppio, compagno, avversari, nostri, loro, vinta } ] } ] }
+// Ci sono solo le partite con gli atleti scritti: FITET dal portale, CSI i
+// nostri incontri compilati in app.
+function paRiepilogo(incontri) {
+    const t = { sv: 0, sp: 0, dv: 0, dp: 0, setv: 0, setp: 0 };
+    for (const i of incontri) for (const p of i.partite) {
+        if (p.vinta === true) p.doppio ? t.dv++ : t.sv++;
+        else if (p.vinta === false) p.doppio ? t.dp++ : t.sp++;
+        t.setv += p.nostri ?? 0; t.setp += p.loro ?? 0;
+    }
+    return t;
+}
+function paHtml(d) {
+    const t = paRiepilogo(d.incontri);
+    const esito = v => v === true ? 'V' : v === false ? 'P' : 'N';
+    const scelte = [...d.stagioni.map(s => `<option value="${esc(s)}"${s === d.stagione ? ' selected' : ''}>Stagione ${esc(s)}</option>`),
+        `<option value="tutte"${d.stagione ? '' : ' selected'}>Tutte le stagioni</option>`].join('');
+    const partita = p => `<div class="paPartita">
+        <b class="clEsito clEsito${esito(p.vinta)}">${esito(p.vinta)}</b>
+        ${p.doppio ? `Doppio${p.compagno ? ' con ' + esc(p.compagno) : ''}` : 'Singolo'} vs ${esc(p.avversari)}
+        · <b>${p.nostri ?? 0}-${p.loro ?? 0}</b></div>`;
+    const voce = i => `
+      <li class="atleta cliccabile" data-inc="${esc(String(i.id))}">
+        <b>${i.inCasa ? '🏠' : '🚌'} ${esc(i.squadra)} – ${esc(i.avversaria)}</b><br>
+        <small>${esc([i.quando, i.campionato].filter(Boolean).join(' · '))}</small>
+        ${i.partite.map(partita).join('')}
+      </li>`;
+    return `<button class="pieno chiaro" id="paIndietro">← Atleti</button>
+      <h3 class="clTitolo">${esc(d.nome)}</h3>
+      <select id="paStagione">${scelte}</select>
+      <div class="lvInfo">Incontri ${d.incontri.length} · singoli <b>${t.sv} V</b> ${t.sp} P · doppi <b>${t.dv} V</b> ${t.dp} P · set ${t.setv}-${t.setp}</div>
+      ${d.incontri.length ? `<ul>${d.incontri.map(voce).join('')}</ul>`
+        : '<p class="vuoto">Nessuna partita con questo atleta scritto. Ci sono le partite FITET lette dal portale e quelle compilate in app; dal sito CSI arrivano i set senza i nomi.</p>'}
+      <div class="lvInfo">V vinta · P persa · N non finita · 🏠 in casa · 🚌 in trasferta. Tocca un incontro per aprirlo.</div>`;
+}
