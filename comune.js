@@ -1225,7 +1225,8 @@ function paHtml(d) {
 // In fondo alla pagina delle partite di un atleta, stessa stagione. s =
 // { punti: [ { data: 'aaaa-mm-gg', punti, inizio } ], partite: [ { data,
 //   gara, turno, squadre, avversario, vinta, nostri, loro, prob } ] } (prob
-// per mille, secondo TTitalia; puo' mancare). Via cloud li calcola il
+// per mille, secondo TTitalia; puo' mancare). 18/11: a video "Lista partite",
+// senza il nome del sito (richiesta dell'utente). Via cloud li calcola il
 // telefono (stCalcola in pwa-cloud/atleti.js), in rete locale il PC
 // (StoricoAtletaLogica.cs, campo "storico" di /api/atleti/{id}/partite).
 // s vuoto = niente dati TTitalia per questo atleta (non si mostra nulla,
@@ -1242,12 +1243,12 @@ function stHtml(s, stagione, nota) {
     const partita = p => `<li class="paPartita">
         <b class="clEsito clEsito${p.vinta ? 'V' : 'P'}">${p.vinta ? 'V' : 'P'}</b>
         ${stGiorno(p.data)} · ${esc(p.gara)}${p.turno ? ' · ' + esc(p.turno) : ''} vs ${esc(p.avversario)}
-        · <b>${p.nostri}-${p.loro}</b>${p.prob != null ? ` <small>(TTitalia: ${Math.round(p.prob / 10)} %)</small>` : ''}</li>`;
-    return `<h3 class="clTitolo">Dal sito TTitalia</h3>
+        · <b>${p.nostri}-${p.loro}</b>${p.prob != null ? ` <small>(previsto ${Math.round(p.prob / 10)} %)</small>` : ''}</li>`;
+    return `<h3 class="clTitolo">Lista partite</h3>
       <div class="lvInfo">Punti FITET: ${riga}</div>
       ${s.partite.length ? `<details class="gr" id="stPartite"><summary>Partite di singolo, campionati e tornei
           <span>${v} V · ${s.partite.length - v} P</span></summary>
         <ul>${s.partite.map(partita).join('')}</ul></details>`
-        : '<p class="vuoto">Nessuna partita su TTitalia in questa stagione.</p>'}
+        : '<p class="vuoto">Nessuna partita in questa stagione.</p>'}
       ${nota ? `<div class="lvInfo">${esc(nota)}</div>` : ''}`;
 }

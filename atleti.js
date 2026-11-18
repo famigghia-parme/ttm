@@ -236,7 +236,7 @@ async function paCalcola(uid, stagione) {
     return {
         nome: nomeAtleta(a), stagione: scelta, stagioni, incontri: scelta ? tuttiInc.filter(x => x.stagione === scelta) : tuttiInc,
         storico: st ? stFiltra(st, scelta) : null,
-        storicoNota: copia ? '' : (navigator.onLine ? '' : 'Punti e partite dal sito TTitalia: serve la rete la prima volta.')
+        storicoNota: copia ? '' : (navigator.onLine ? '' : 'Lista partite: serve la rete la prima volta.')
     };
 }
 
