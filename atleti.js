@@ -227,14 +227,22 @@ async function paCalcola(uid, stagione) {
         };
     }).sort((x, y) => String(y.data).localeCompare(String(x.data)));
     const corrente = await stagioneCorrente();
-    const stagioni = [...new Set(tuttiInc.map(x => x.stagione).filter(Boolean))].sort().reverse();
+    // 18/11: punti e partite TTitalia (copia sul telefono, vedi stLeggi)
+    const copia = await stLeggi(uid);
+    const st = copia ? stCalcola(uid, copia.partite, copia.punti) : null;
+    const stagioni = [...new Set([...tuttiInc.map(x => x.stagione), ...(st ? stStagioni(st) : [])].filter(Boolean))].sort().reverse();
     if (corrente && !stagioni.includes(corrente)) stagioni.unshift(corrente);
     const scelta = stagione == null ? (corrente || '') : stagione;
-    return { nome: nomeAtleta(a), stagione: scelta, stagioni, incontri: scelta ? tuttiInc.filter(x => x.stagione === scelta) : tuttiInc };
+    return {
+        nome: nomeAtleta(a), stagione: scelta, stagioni, incontri: scelta ? tuttiInc.filter(x => x.stagione === scelta) : tuttiInc,
+        storico: st ? stFiltra(st, scelta) : null,
+        storicoNota: copia ? '' : (navigator.onLine ? '' : 'Punti e partite dal sito TTitalia: serve la rete la prima volta.')
+    };
 }
 
 async function paApri(uid, stagione = null) {
     const d = await paCalcola(uid, stagione);
+    stAggiorna(uid);         // 18/11: in sottofondo; se arriva qualcosa di nuovo si ridisegna
     const c = $('#paCorpo');
     if (!d || !c) return;
     const primaVolta = paAperto?.uid !== uid;
@@ -254,4 +262,81 @@ function paChiudi() {
     const c = $('#paCorpo');
     if (c) { c.hidden = true; c.innerHTML = ''; }
     if ($('#atElenco')) $('#atElenco').hidden = false;
+}
+
+// ---------------- punti e partite dal sito TTitalia (18/11) ----------------
+// Li scrive il PC (TtitaliaService) nelle tabelle punteggi_storici e
+// partite_storiche. Non si sincronizzano tutte sul telefono (decine di
+// migliaia di righe): si chiedono al cloud quelle dell'atleta aperto e se ne
+// tiene una copia (voce di 'meta' "storico.<uid>"), cosi' si vedono anche
+// senza rete dalla seconda volta. Stessa regola di StoricoAtletaLogica.cs
+// sul PC; disegno: stHtml in comune.js.
+const ST_RINFRESCO_MS = 10 * 60000;      // stesso atleta: al massimo una richiesta ogni 10 minuti
+const stChiesti = new Map();             // uid -> quando
+
+async function stLeggi(uid) { return await metaLeggi('storico.' + uid); }
+
+// Chiede al cloud le righe dell'atleta; se sono cambiate le salva e, se la
+// sua pagina e' ancora aperta, la ridisegna. Tabelle che il cloud non ha
+// ancora (schema.sql non rieseguito): niente, senza errori.
+async function stAggiorna(uid) {
+    if (!navigator.onLine || !Cloud.sessione) return;
+    const ultima = stChiesti.get(uid);
+    if (ultima && Date.now() - ultima < ST_RINFRESCO_MS) return;
+    stChiesti.set(uid, Date.now());
+    try {
+        const leggi = async q => {
+            const r = await Cloud.rest('GET', q);
+            if (!r.ok) throw Object.assign(new Error('lettura non riuscita'), { status: r.status });
+            return r.json || [];
+        };
+        const u = encodeURIComponent(uid);
+        const [a, b, punti] = await Promise.all([
+            leggi(`partite_storiche?select=*&atleta_a_uid=eq.${u}&eliminato=eq.false&limit=1000`),
+            leggi(`partite_storiche?select=*&atleta_b_uid=eq.${u}&eliminato=eq.false&limit=1000`),
+            leggi(`punteggi_storici?select=*&atleta_uid=eq.${u}&eliminato=eq.false&limit=1000`)]);
+        const nuova = { partite: [...a, ...b.filter(x => !a.some(y => y.uid === x.uid))], punti };
+        const vecchia = await stLeggi(uid);
+        const firma = c => c ? JSON.stringify([c.partite.map(x => x.uid + x.modificato_il).sort(), c.punti.map(x => x.uid + x.modificato_il).sort()]) : '';
+        if (firma(vecchia) === firma(nuova)) return;
+        await metaScrivi('storico.' + uid, nuova);
+        if (paAperto?.uid === uid) paApri(uid, paAperto.stagione);
+    } catch { /* senza rete o tabelle non ancora nel cloud: si resta con la copia che c'e' */ }
+}
+
+// Righe del cloud -> { punti, partite } dal suo punto di vista (come StoricoAtletaLogica.Calcola)
+function stCalcola(uid, partite, punti) {
+    const lista = [];
+    for (const p of partite || []) {
+        const a = p.atleta_a_uid === uid;
+        if (!a && p.atleta_b_uid !== uid) continue;
+        const data = String(p.data || '').slice(0, 10);
+        lista.push({
+            data, stagione: stStagioneDi(data), squadre: !!p.squadre, gara: p.gara || '', turno: p.turno || '',
+            avversario: (a ? p.nome_b : p.nome_a) || '?',
+            nostri: a ? p.set_a : p.set_b, loro: a ? p.set_b : p.set_a,
+            vinta: a ? p.set_a > p.set_b : p.set_b > p.set_a,
+            prob: p.probabilita_a == null ? null : (a ? p.probabilita_a : 1000 - p.probabilita_a)
+        });
+    }
+    const cmp = (x, y) => (x < y ? -1 : x > y ? 1 : 0);
+    lista.sort((x, y) => cmp(y.data, x.data) || cmp(x.gara, y.gara) || cmp(x.turno, y.turno) || cmp(x.avversario, y.avversario));
+    return {
+        partite: lista,
+        punti: (punti || []).filter(p => p.atleta_uid === uid)
+            .map(p => ({ data: String(p.data || '').slice(0, 10), punti: p.punti, inizio: !!p.inizio_stagione }))
+            .sort((x, y) => cmp(x.data, y.data))
+    };
+}
+
+// "2026-10-17" -> "2026/27"; "2026-04-19" -> "2025/26" (la stagione comincia il 1 luglio)
+function stStagioneDi(data) {
+    const anno = +data.slice(0, 4), mese = +data.slice(5, 7);
+    const a = mese >= 7 ? anno : anno - 1;
+    return `${a}/${String((a + 1) % 100).padStart(2, '0')}`;
+}
+function stStagioni(st) { return [...st.partite.map(p => p.stagione), ...st.punti.map(p => stStagioneDi(p.data))]; }
+function stFiltra(st, stagione) {
+    if (!stagione) return st;
+    return { partite: st.partite.filter(p => p.stagione === stagione), punti: st.punti.filter(p => stStagioneDi(p.data) === stagione) };
 }

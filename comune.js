@@ -1217,5 +1217,37 @@ function paHtml(d) {
       <div class="lvInfo">Incontri ${d.incontri.length} · singoli <b>${t.sv} V</b> ${t.sp} P · doppi <b>${t.dv} V</b> ${t.dp} P · set ${t.setv}-${t.setp}</div>
       ${d.incontri.length ? `<ul>${d.incontri.map(voce).join('')}</ul>`
         : '<p class="vuoto">Nessuna partita con questo atleta scritto. Ci sono le partite FITET lette dal portale e quelle compilate in app; dal sito CSI arrivano i set senza i nomi.</p>'}
-      <div class="lvInfo">V vinta · P persa · N non finita · 🏠 in casa · 🚌 in trasferta. Tocca un incontro per aprirlo.</div>`;
+      <div class="lvInfo">V vinta · P persa · N non finita · 🏠 in casa · 🚌 in trasferta. Tocca un incontro per aprirlo.</div>
+      ${stHtml(d.storico, d.stagione, d.storicoNota)}`;
+}
+
+// ---------------- punti e partite dal sito TTitalia (18/11) ----------------
+// In fondo alla pagina delle partite di un atleta, stessa stagione. s =
+// { punti: [ { data: 'aaaa-mm-gg', punti, inizio } ], partite: [ { data,
+//   gara, turno, squadre, avversario, vinta, nostri, loro, prob } ] } (prob
+// per mille, secondo TTitalia; puo' mancare). Via cloud li calcola il
+// telefono (stCalcola in pwa-cloud/atleti.js), in rete locale il PC
+// (StoricoAtletaLogica.cs, campo "storico" di /api/atleti/{id}/partite).
+// s vuoto = niente dati TTitalia per questo atleta (non si mostra nulla,
+// salvo la nota: es. "serve la rete la prima volta").
+function stGiorno(iso) { const p = String(iso || '').slice(0, 10).split('-'); return p.length === 3 ? `${p[2]}/${p[1]}/${p[0].slice(2)}` : ''; }
+function stHtml(s, stagione, nota) {
+    if (!s || (!s.punti?.length && !s.partite?.length)) return nota ? `<div class="lvInfo">${esc(nota)}</div>` : '';
+    // con tutte le stagioni, dei punti solo le ultime 12 classifiche
+    const punti = stagione ? s.punti : s.punti.slice(-12);
+    const riga = punti.length
+        ? punti.map(p => `${stGiorno(p.data)} <b>${p.punti}</b>${p.inizio ? ' (inizio stagione)' : ''}`).join(' · ')
+        : 'nessuna classifica in questa stagione';
+    const v = s.partite.filter(p => p.vinta).length;
+    const partita = p => `<li class="paPartita">
+        <b class="clEsito clEsito${p.vinta ? 'V' : 'P'}">${p.vinta ? 'V' : 'P'}</b>
+        ${stGiorno(p.data)} · ${esc(p.gara)}${p.turno ? ' · ' + esc(p.turno) : ''} vs ${esc(p.avversario)}
+        · <b>${p.nostri}-${p.loro}</b>${p.prob != null ? ` <small>(TTitalia: ${Math.round(p.prob / 10)} %)</small>` : ''}</li>`;
+    return `<h3 class="clTitolo">Dal sito TTitalia</h3>
+      <div class="lvInfo">Punti FITET: ${riga}</div>
+      ${s.partite.length ? `<details class="gr" id="stPartite"><summary>Partite di singolo, campionati e tornei
+          <span>${v} V · ${s.partite.length - v} P</span></summary>
+        <ul>${s.partite.map(partita).join('')}</ul></details>`
+        : '<p class="vuoto">Nessuna partita su TTitalia in questa stagione.</p>'}
+      ${nota ? `<div class="lvInfo">${esc(nota)}</div>` : ''}`;
 }
