@@ -1243,7 +1243,9 @@ function stHtml(s, stagione, nota) {
     const partita = p => `<li class="paPartita">
         <b class="clEsito clEsito${p.vinta ? 'V' : 'P'}">${p.vinta ? 'V' : 'P'}</b>
         ${stGiorno(p.data)} · ${esc(p.gara)}${p.turno ? ' · ' + esc(p.turno) : ''} vs ${esc(p.avversario)}
-        · <b>${p.nostri}-${p.loro}</b>${p.prob != null ? ` <small>(previsto ${Math.round(p.prob / 10)} %)</small>` : ''}</li>`;
+        · <b>${p.nostri}-${p.loro}</b></li>`;
+    // 18/11 sera: la probabilita' (p.prob, di TTitalia) NON si mostra (richiesta dell'utente);
+    // piu' avanti si mostrera' la nostra, quando i pronostici saranno provati
     return `<h3 class="clTitolo">Lista partite</h3>
       <div class="lvInfo">Punti FITET: ${riga}</div>
       ${s.partite.length ? `<details class="gr" id="stPartite"><summary>Partite di singolo, campionati e tornei
