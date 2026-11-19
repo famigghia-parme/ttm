@@ -359,6 +359,56 @@ function agganciaGruppi(vista, contenitore) {
     }));
 }
 
+// ---------------- scelta della societa' ad albero (20/11, Atleti) ----------------
+// Al posto della tendina (troppo lunga sul telefono): federazione >
+// campionato > girone > societa', come gli elenchi raggruppati qui sopra.
+// In cima "Tutte le societa'" e le nostre; in fondo, per federazione, le
+// societa' senza squadre nella stagione (es. arrivate dal .tdb). Una
+// societa' con piu' squadre in gironi diversi compare in ognuno; due sue
+// squadre nello stesso girone = una riga sola.
+// soc = [{ k (id o uid, come testo), nome, fed ('FITET'/'CSI'), nostra,
+//          gironi: [{ campionato, girone }] }]
+// scelta = k della societa' scelta ('' = tutte); conta(k) = numero di
+// tesserati da mostrare a destra (facoltativo).
+// La nostra societa' ha la stella e lo sfondo (classe rsSq nostra, come la
+// Rosa), la scelta ha la spunta: mai il solo colore del testo.
+const SOC_SENZA = 'Senza squadre in questa stagione';
+
+function htmlAlberoSocieta(soc, scelta, conta = null) {
+    const n = k => conta ? `<div class="rsNum">${conta(k) || 0}</div>` : '';
+    const voce = s => `<li class="atleta cliccabile rsSq${s.nostra ? ' nostra' : ''}" data-soc="${esc(s.k)}">
+        <b>${s.k === scelta ? '✓ ' : ''}${esc(s.nome)}</b>${n(s.k)}</li>`;
+    const perNome = (a, b) => a.nome.localeCompare(b.nome, 'it');
+    const voci = [];
+    for (const s of soc) {
+        const visti = new Set();
+        for (const g of s.gironi || []) {
+            const k = (g.campionato || '') + '|' + (g.girone || '');
+            if (visti.has(k)) continue;
+            visti.add(k);
+            voci.push({ s, nome: s.nome, tipo: s.fed || 'Altro', campionato: g.campionato || '', girone: g.girone || '' });
+        }
+        // Senza squadre: un'intestazione a parte (ORDINE_FEDERAZIONI la mette
+        // dopo FITET e CSI), un gruppo per federazione
+        if (!visti.size) voci.push({ s, nome: s.nome, tipo: SOC_SENZA, campionato: s.fed || 'Altro', girone: '' });
+    }
+    // Dentro il girone: prima le nostre, poi in ordine di nome
+    voci.sort((a, b) => (b.s.nostra - a.s.nostra) || perNome(a, b));
+    const nostre = soc.filter(s => s.nostra).sort(perNome);
+    const testa = conta ? '<li class="rsTesta"><div>Società</div><div class="rsNum">Tesserati</div></li>' : '';
+    return `<ul class="socCima">
+        <li class="atleta cliccabile rsSq" data-soc=""><b>${scelta ? '' : '✓ '}Tutte le società</b></li>
+        ${nostre.map(voce).join('')}</ul>` +
+        htmlGruppi('societa', voci, v => voce(v.s), testa, g => voci.some(v => v.s.nostra && v.tipo === g.tipo
+            && v.campionato === g.campionato && v.girone === g.girone));
+}
+
+// Tocco su una societa' -> alScelta(k). I gruppi aperti si ricordano.
+function agganciaAlberoSocieta(contenitore, alScelta) {
+    agganciaGruppi('societa', contenitore);
+    contenitore.querySelectorAll('li[data-soc]').forEach(li => li.onclick = () => alScelta(li.dataset.soc));
+}
+
 // ---------------- classifica ----------------
 // Stesso disegno nelle due PWA; cambia solo da dove arrivano i numeri
 // (classifica.js: nel cloud li calcola il telefono, in rete locale il PC).

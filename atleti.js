@@ -10,17 +10,22 @@
 //    (chi non e' tesserato FITET non li ha: non compare nulla).
 // 13/11 (1.4.7): un tocco sull'atleta mostra i suoi incontri e partite
 // (paCalcola qui sotto, disegno paHtml in comune.js), con il filtro stagione.
+// 20/11 (1.5.1): la tendina delle societa' (lunghissima sul telefono) e'
+// diventata un pulsante che apre un albero federazione > campionato >
+// girone > societa' (htmlAlberoSocieta in comune.js).
 
 let atSoc = '';                 // '' = tutte le societa'
 try { atSoc = localStorage.getItem('ttm.societa') || ''; } catch { }
 let atRighe = [];               // un tesseramento per riga (vedi atCarica)
 let atSocieta = new Map();      // uid -> societa' (per il numero della societa' scelta)
+let atAlbero = [];              // societa' per l'albero (atInit), vedi htmlAlberoSocieta
 const AT_MAX = 80;              // oltre, si chiede di scrivere qualche lettera in piu'
 
 viste.atleti = {
     html: `
       <div id="atElenco">
-      <select id="selSoc"></select>
+      <button id="btnSoc" class="pieno chiaro"></button>
+      <div id="socAlbero" hidden></div>
       <div id="socInfo" class="lvInfo"></div>
       <input id="cerca" type="search" placeholder="Cerca cognome e nome…" autocomplete="off">
       <button id="btnNuovo" class="pieno">+ Nuovo atleta</button>
@@ -53,29 +58,28 @@ async function atInit() {
     const [societa, squadre, campionati] = await Promise.all(['societa', 'squadre', 'campionati'].map(tutti));
     const C = perUid(campionati);
     atSocieta = perUid(societa);
-    // Le societa' delle nostre squadre nella stagione: in cima alla tendina
-    const nostre = new Set(squadre.filter(s => s.nostra_squadra && C.get(s.campionato_uid)?.stagione === stag).map(s => s.societa_uid));
-    const perNome = (a, b) => a.nome.localeCompare(b.nome, 'it');
+    // Squadre della stagione per societa': i gironi dell'albero
+    const gironi = new Map();
+    for (const sq of squadre) {
+        const cp = C.get(sq.campionato_uid);
+        if (cp?.stagione !== stag) continue;
+        if (!gironi.has(sq.societa_uid)) gironi.set(sq.societa_uid, { nostra: false, gironi: [] });
+        const g = gironi.get(sq.societa_uid);
+        g.gironi.push({ campionato: cp.nome, girone: sq.girone || '' });
+        if (sq.nostra_squadra) g.nostra = true;      // le nostre: in cima all'albero
+    }
     // federazione(): societa.tipo arriva come "0"/"1", vedi app.js
-    const fed = s => federazione(s.tipo) || 'Altro';
-    const opz = (s, conTipo) => `<option value="${s.uid}">${esc(s.nome)}${conTipo ? ` (${esc(fed(s))})` : ''}</option>`;
-    const gruppo = (titolo, lista, conTipo) => lista.length
-        ? `<optgroup label="${esc(titolo)}">${lista.sort(perNome).map(s => opz(s, conTipo)).join('')}</optgroup>` : '';
-    const altre = societa.filter(s => !nostre.has(s.uid));
-    const federazioni = [...new Set(altre.map(fed))]
-        .sort((a, b) => (ORDINE_FEDERAZIONI[a] ?? 9) - (ORDINE_FEDERAZIONI[b] ?? 9) || a.localeCompare(b, 'it'));
-
-    const sel = $('#selSoc');
-    sel.innerHTML = '<option value="">Tutte le società</option>' +
-        gruppo('Le nostre', societa.filter(s => nostre.has(s.uid)), true) +
-        federazioni.map(f => gruppo(f, altre.filter(s => fed(s) === f), false)).join('');
-    if (!societa.some(s => s.uid === atSoc)) atSoc = '';
-    sel.value = atSoc;
-    sel.onchange = () => { atSoc = sel.value; try { localStorage.setItem('ttm.societa', atSoc); } catch { } atDisegna(); };
+    atAlbero = societa.map(s => ({
+        k: s.uid, nome: s.nome, fed: federazione(s.tipo) || 'Altro',
+        nostra: !!gironi.get(s.uid)?.nostra, gironi: gironi.get(s.uid)?.gironi || []
+    }));
+    if (!atSocieta.has(atSoc)) atSoc = '';
+    $('#btnSoc').onclick = () => atApriAlbero($('#socAlbero').hidden);
+    atScritta();
 
     $('#cerca').oninput = atDisegna;
     $('#btnNuovo').onclick = () => {
-        if (!atSoc) { avviso('Per un nuovo atleta scegli prima la società nella tendina.'); return; }
+        if (!atSoc) { avviso('Per un nuovo atleta scegli prima la società (pulsante "Società" in alto).'); return; }
         $('#frmNuovo').hidden = false; $('#frmNuovo').cognome.focus();
     };
     $('#btnAnnulla').onclick = () => { $('#frmNuovo').reset(); $('#frmNuovo').hidden = true; msg(''); };
@@ -84,6 +88,34 @@ async function atInit() {
     $('#lista').onclick = e => { const li = e.target.closest('li.atleta[data-uid]'); if (li) paApri(li.dataset.uid); };
     atCarica();
     if (paRiapri) { const r = paRiapri; paRiapri = null; paApri(r.uid, r.stagione); }
+}
+
+// Scritta del pulsante: la societa' scelta (con la federazione) o "Tutte"
+function atScritta() {
+    const s = atSocieta.get(atSoc), aperto = !$('#socAlbero').hidden;
+    $('#btnSoc').textContent = aperto ? '▴ Chiudi l\'elenco delle società'
+        : `Società: ${s ? `${s.nome} (${federazione(s.tipo)})` : 'tutte'}  ▾`;
+}
+
+// Albero aperto = al posto di ricerca ed elenco degli atleti
+function atApriAlbero(apri) {
+    const a = $('#socAlbero');
+    a.hidden = !apri;
+    for (const id of ['socInfo', 'cerca', 'btnNuovo', 'lista']) $('#' + id).hidden = apri;
+    if (apri) {
+        $('#btnAnnulla').click();                  // modulo del nuovo atleta chiuso
+        const n = new Map();                       // tesserati per societa'
+        for (const r of atRighe) if (r.s) n.set(r.s.uid, (n.get(r.s.uid) || 0) + 1);
+        a.innerHTML = htmlAlberoSocieta(atAlbero, atSoc, k => n.get(k));
+        agganciaAlberoSocieta(a, k => {
+            atSoc = k;
+            try { localStorage.setItem('ttm.societa', atSoc); } catch { }
+            atApriAlbero(false);
+            atDisegna();
+        });
+    } else a.innerHTML = '';
+    atScritta();
+    window.scrollTo(0, 0);
 }
 
 // Una riga per TESSERAMENTO della stagione (atleta + societa'): lo stesso
