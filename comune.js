@@ -425,7 +425,7 @@ function clSquadraHtml(sq, incontri) {
 // Calendario dei tornei individuali, stesso disegno nelle due PWA; cambia
 // solo da dove arriva l'elenco (via cloud i dati scaricati sul telefono, in
 // rete locale api/tornei del PC). Un torneo:
-//   { id, federazione, regione, tipo, nome, localita,
+//   { id, federazione, regione, tipo, nome, localita, indirizzo (19/11, o null),
 //     inizio: 'AAAA-MM-GG', fine: 'AAAA-MM-GG' o null,
 //     gare: ['...'], url, programma }
 // Elenco da oggi in poi (un torneo di piu' giorni resta finche' non
@@ -453,8 +453,14 @@ const trIndirizzo = u => /^https?:\/\//i.test(u || '') ? u : '';
 // Percorso in Google Maps fino alla localita' (strada e tempi veri: la
 // distanza scritta accanto al torneo e' in linea d'aria). Senza partenza:
 // Maps parte da dove si trova il telefono.
-const trMappa = localita => String(localita || '').trim()
-    ? 'https://www.google.com/maps/dir/?api=1&destination=' + encodeURIComponent(String(localita).trim() + ', Italia') : '';
+// 19/11: con l'indirizzo (via, palestra) Maps porta li' e non in centro
+// paese: "indirizzo, localita', Italia"; le note fra parentesi
+// dell'indirizzo ("(entrata da via V.Veneto)") non vanno a Maps. Stessa
+// regola di TorneiLogica.DestinazioneMappa sul PC.
+const trPulito = s => String(s || '').trim().split(/\s+/).filter(Boolean).join(' ');
+const trMappa = (localita, indirizzo) => trPulito(localita)
+    ? 'https://www.google.com/maps/dir/?api=1&destination=' +
+      encodeURIComponent([trPulito(String(indirizzo || '').replace(/\([^()]*\)/g, ' ')), trPulito(localita)].filter(Boolean).join(', ') + ', Italia') : '';
 
 // Filtro "entro ... km" (0 = qualsiasi distanza)
 const TR_DISTANZE = [0, 50, 100, 200, 400];
@@ -490,12 +496,13 @@ function trHtmlTorneo(t, piuFederazioni, oggi) {
     // (per il CSI il tipo e' gia' "CSI Bergamo", il comitato che organizza)
     const fed = piuFederazioni && !String(t.tipo || '').toUpperCase().includes(String(t.federazione || '').toUpperCase()) ? t.federazione : null;
     const dove = [t.localita, t.km != null ? `≈ ${t.km} km` : null, t.regione, t.tipo, fed].filter(Boolean).join(' · ');
-    const url = trIndirizzo(t.url), programma = trIndirizzo(t.programma), mappa = trMappa(t.localita);
+    const url = trIndirizzo(t.url), programma = trIndirizzo(t.programma), mappa = trMappa(t.localita, t.indirizzo);
     const gare = (t.gare || []).filter(Boolean);
     return `<li class="atleta trVoce">
       <details class="trTorneo">
         <summary><b>${esc(trQuando(t))}</b>${inCorso ? ' <i class="trOggi">oggi</i>' : ''} ${esc(nome)}<br><small>${esc(dove)}</small></summary>
         <div class="trDett">
+          ${t.indirizzo ? `<p class="trSede">📍 ${esc(trPulito(t.indirizzo))}</p>` : ''}
           ${gare.length ? '<ul class="trGare">' + gare.map(g => `<li>${esc(g)}</li>`).join('') + '</ul>'
             : '<p class="trNo">Gare non indicate sul sito.</p>'}
           ${url || programma || mappa ? `<p class="trLink">

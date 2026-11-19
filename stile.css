@@ -259,6 +259,7 @@ details.trTorneo > summary small { color: var(--grigio); }
 ul.trGare { margin: 0 0 8px; padding: 0 0 0 18px; list-style: disc; font-size: 14px; }
 ul.trGare li { padding: 2px 0; }
 .trNo { margin: 0 0 8px; color: var(--grigio); font-size: 14px; }
+.trSede { margin: 0 0 8px; font-size: 14px; }   /* 19/11: indirizzo del torneo */
 .trLink { margin: 0; display: flex; flex-wrap: wrap; gap: 8px; }
 .trLink a { display: inline-block; padding: 9px 12px; border: 1px solid var(--verde); border-radius: 8px;
             color: var(--verde); font-weight: 600; text-decoration: none; background: #fff; font-size: 14px; }

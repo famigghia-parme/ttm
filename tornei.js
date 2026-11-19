@@ -15,6 +15,7 @@ async function trDati() {
         tipo: r.tipo,
         nome: r.nome,
         localita: r.localita,
+        indirizzo: r.indirizzo || null,     // 19/11: via della sede (schema.sql V1.3)
         inizio: String(r.data_inizio || '').slice(0, 10),
         fine: r.data_fine ? String(r.data_fine).slice(0, 10) : null,
         gare: String(r.gare || '').split('\n').map(g => g.trim()).filter(Boolean),
