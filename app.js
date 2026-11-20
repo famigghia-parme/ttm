@@ -257,6 +257,18 @@ async function esci() {
 // ---------------- service worker ----------------
 function registraSw() {
     if (!('serviceWorker' in navigator)) return;
+    // 20/11 (1.6.1): versione nuova scartata perche' sul sito non si scarica un
+    // file (sw.js: scaricaFile). Fascia rossa fissa finche' non la si
+    // tocca: il telefono resta sulla versione di adesso, che funziona.
+    navigator.serviceWorker.addEventListener('message', e => {
+        if (e.data?.tipo !== 'aggiornamento-fallito') return;
+        const b = $('#aggErrore');
+        if (!b) return;
+        b.textContent = `Aggiornamento alla ${e.data.versione} non riuscito: sul sito non si scarica ${e.data.file.join(', ')}. ` +
+            `L'app resta alla ${VERSIONE_APP}: avvisa chi la pubblica. (tocca per chiudere)`;
+        b.hidden = false;
+        b.onclick = () => { b.hidden = true; };
+    });
     navigator.serviceWorker.register('sw.js').then(reg => {
         // Nuova versione scaricata e in attesa: si chiede di aggiornare
         const avvisa = w => {

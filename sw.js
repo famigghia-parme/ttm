@@ -5,7 +5,7 @@
 // mostra "Nuova versione disponibile".
 // Le chiamate a Supabase non passano da qui (altro dominio).
 
-const VERSIONE = '1.6.0';
+const VERSIONE = '1.6.1';
 const CACHE = 'ttm-' + VERSIONE;
 
 // Tutti i file caricati con ?v= da index.html (script e foglio di stile)
@@ -35,9 +35,7 @@ async function scaricaModelli() {
 
 self.addEventListener('install', e => {
     // cache: 'reload' = dalla rete, non dalla cache HTTP del browser
-    e.waitUntil(Promise.all([
-        caches.open(CACHE).then(c => c.addAll(FILE.map(f => new Request(f, { cache: 'reload' })))),
-        scaricaModelli()]));
+    e.waitUntil(Promise.all([scaricaFile(), scaricaModelli()]));
     // Niente skipWaiting qui: la nuova versione parte quando l'utente tocca
     // "aggiorna" (vedi message), non a meta' di una gara.
 });
@@ -62,6 +60,30 @@ self.addEventListener('message', e => {
         e.waitUntil(ricaricaFile().then(() => porta?.postMessage(true), err => porta?.postMessage(String(err?.message || err))));
     }
 });
+
+// Installazione: tutti i file o niente (come prima cache.addAll). 20/11
+// (1.6.1): se il sito risponde con un errore per qualche file (es. 404: un
+// file nuovo non copiato nel repository ttm) la versione nuova si scarta
+// come prima, ma le pagine aperte lo sanno ('aggiornamento-fallito', in
+// app.js la fascia rossa) invece di restare in silenzio sulla vecchia.
+// Senza rete (fetch che non risponde) nessun avviso: si riprova da soli.
+async function scaricaFile() {
+    const esiti = await Promise.all(FILE.map(async f => {
+        try {
+            const r = await fetch(new Request(f, { cache: 'reload' }));
+            return r.ok ? { f, r } : { f, errore: `${f.split("?")[0]} (risposta ${r.status})` };
+        } catch { return { f, rete: true }; }
+    }));
+    const errori = esiti.filter(x => x.errore).map(x => x.errore);
+    if (errori.length) {
+        for (const c of await self.clients.matchAll({ includeUncontrolled: true, type: 'window' }))
+            c.postMessage({ tipo: 'aggiornamento-fallito', versione: VERSIONE, file: errori });
+        throw new Error('file mancanti: ' + errori.join(', '));
+    }
+    if (esiti.some(x => x.rete)) throw new Error('rete assente');
+    const c = await caches.open(CACHE);
+    for (const { f, r } of esiti) await c.put(f, r);
+}
 
 async function ricaricaFile() {
     const scaricati = await Promise.all(FILE.map(async f => {
