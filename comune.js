@@ -409,6 +409,187 @@ function agganciaAlberoSocieta(contenitore, alScelta) {
     contenitore.querySelectorAll('li[data-soc]').forEach(li => li.onclick = () => alScelta(li.dataset.soc));
 }
 
+// ---------------- risultati a fine gara (20/11) ----------------
+// Il "Correggi" del PC sul telefono: si ricopia il referto compilato a
+// mano, partita per partita (giocatori e set chiusi). Disegno e lettura
+// del modulo stanno qui, uguali nelle due PWA; chi salva e' risultati.js
+// (cloud: sui dati locali; rete locale: lo fa il PC, /api/incontri/{id}/risultati).
+// Come sul referto: a SINISTRA la squadra con le lettere A, B, C (sx), a
+// destra quella con X, Y, Z (dx), anche se gioca fuori casa. I dati sono
+// gia' girati cosi' da chi chiama: abcInCasa dice come tornare a casa/ospite.
+//
+// dati = {
+//   abcInCasa, setPerVincere,
+//   sx / dx: { nome, voci: [{ k, nome }] (titolari e riserve, per i singoli e
+//              il doppio) o null se la squadra non ha la formazione,
+//              vociDoppio: [{ k, nome }] (chi e' a referto solo per il doppio) },
+//   partite: [{ k, ordine, tipo, nota ('A - X', 'Doppio', 'tavolo 2'...),
+//               csi: [vinti sx, vinti dx] se dal sito CSI (solo set vinti), o null,
+//               sx / dx: { scelti: [k1, k2] (k = uid o id come testo, '' = nessuno),
+//                          nomi: [nome1, nome2] di chi c'e' adesso (testo se
+//                          non c'e' la tendina; '' = nessuno) },
+//               set: [[sx, dx], ...] (set gia' scritti) }],
+//   archivio: [sx, dx] risultato in archivio, o null }
+const RI_MAX_SET = 5;
+
+// Come Gioco.isSetTerminato (gioco.js) e SetService.IsSetTerminato sul PC:
+// 11 con due punti di scarto, dal 10-10 chi va a +2. Copia qui perche' la
+// PWA in rete locale non ha gioco.js.
+function riSetChiuso(a, b) {
+    const max = Math.max(a, b), min = Math.min(a, b);
+    if (max < 11) return false;
+    if (max === 11 && min <= 9) return true;
+    return min >= 10 && max - min >= 2;
+}
+
+// Set di una partita ([[sx, dx]...], solo set chiusi in ordine) -> esito.
+// Stesse regole di DatabaseService.CorreggiPartitaAsync.
+// { vs, vd, chiusa, errore }
+function riEsitoSet(set, perVincere = 3) {
+    let vs = 0, vd = 0;
+    for (let i = 0; i < set.length; i++) {
+        const [s, d] = set[i];
+        if (vs >= perVincere || vd >= perVincere) return { vs, vd, errore: `set ${i + 1}: la partita era già decisa ${vs}-${vd}` };
+        if (!riSetChiuso(s, d)) return { vs, vd, errore: `set ${i + 1}: ${s}-${d} non chiude un set (11 con due punti di scarto, oppure ai vantaggi)` };
+        if (s > d) vs++; else vd++;
+    }
+    return { vs, vd, chiusa: vs >= perVincere || vd >= perVincere, errore: null };
+}
+
+function riHtml(dati, indietro) {
+    const tendine = (lato, p, sq) => {
+        const g = p[lato];
+        const testo = g.nomi.filter(Boolean).join(' / ') || '?';
+        if (!sq.voci) return `<div class="riNomi">${esc(testo)}</div>`;
+        const doppio = p.tipo === 'Doppio';
+        const voci = doppio ? [...sq.voci, ...(sq.vociDoppio || [])] : sq.voci;
+        const sel = (n) => {
+            const k = g.scelti[n] || '';
+            // chi e' sulla partita ma non (piu') in formazione resta scelto
+            const extra = k && !voci.some(v => v.k === k) ? [{ k, nome: (g.nomi[n] || '?') + ' (non in formazione)' }] : [];
+            return `<select data-p="${esc(p.k)}" data-lato="${lato}" data-n="${n}">
+              <option value="">(nessuno)</option>
+              ${[...voci, ...extra].map(v => `<option value="${esc(v.k)}"${v.k === k ? ' selected' : ''}>${esc(v.nome)}</option>`).join('')}
+            </select>`;
+        };
+        return sel(0) + (doppio ? sel(1) : '');
+    };
+    const casella = (p, i, lato) => {
+        const v = p.set[i]?.[lato === 'sx' ? 0 : 1];
+        return `<input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" enterkeyhint="next" autocomplete="off"
+          class="riPt" data-p="${esc(p.k)}" data-set="${i}" data-lato="${lato}" value="${v ?? ''}" aria-label="set ${i + 1}">`;
+    };
+    const lettera = (sx, p) => p.tipo === 'Doppio' ? 'D' : (p.nota || '').split(' - ')[sx ? 0 : 1] || '';
+    const partita = p => {
+        // Griglia per COLONNE (grid-auto-flow: column): nel DOM le caselle
+        // vanno set per set, sinistra poi destra, e "avanti" sulla tastiera
+        // passa da 11 a 7 e poi al set dopo
+        let griglia = '<span></span>' +
+            `<span class="riChi"><b>${esc(lettera(true, p))}</b></span><span class="riChi"><b>${esc(lettera(false, p))}</b></span>`;
+        for (let i = 0; i < RI_MAX_SET; i++)
+            griglia += `<small>Set ${i + 1}</small>${casella(p, i, 'sx')}${casella(p, i, 'dx')}`;
+        return `<div class="riPart" data-p="${esc(p.k)}">
+          <div class="riTit"><b>Partita ${p.ordine}</b> <small>${esc(p.nota || '')}</small></div>
+          <div class="riGioc"><div>${tendine('sx', p, dati.sx)}</div><span>vs</span><div>${tendine('dx', p, dati.dx)}</div></div>
+          ${p.csi ? `<div class="lvInfo">Dal sito CSI: set vinti ${p.csi[0]}-${p.csi[1]}. Se hai il referto scrivi i punti dei set, se no lascia vuoto (resta così).</div>` : ''}
+          <div class="riSet">${griglia}</div>
+          <div class="riEsito" data-esito="${esc(p.k)}"></div></div>`;
+    };
+    return `<button class="pieno chiaro" id="riIndietro">← ${esc(indietro)}</button>
+      <h4>Risultati a fine gara</h4>
+      <div class="lvInfo">Come sul referto: a sinistra la squadra con le lettere A, B, C, a destra X, Y, Z.
+        Scegli i giocatori e scrivi i set chiusi (11 e 7). Lascia vuoti i set non giocati; svuotare tutti
+        i set di una partita la rimette da giocare. Una riserva in un singolo dopo il doppio, al posto del
+        titolare, è la sostituzione: viene registrata da sola.</div>
+      ${!dati.sx.voci || !dati.dx.voci ? '<div class="lvInfo">I giocatori si scelgono solo per le squadre con la formazione salvata (✏️ Formazione).</div>' : ''}
+      <div class="riTesta"><div><small>A B C</small><br><b>${esc(dati.sx.nome)}</b></div><div><small>X Y Z</small><br><b>${esc(dati.dx.nome)}</b></div></div>
+      ${dati.partite.map(partita).join('')}
+      <div id="riTot" class="rpTot"></div>
+      <div id="msg"></div>
+      <button class="pieno" id="riSalva">💾 Salva i risultati</button>`;
+}
+
+// Legge il modulo. Ritorna { partite, errore } con, per ogni partita,
+// { k, sx: [k1, k2], dx: [k1, k2], set: [[sx, dx]...], esito }. I set sono
+// quelli scritti (vuoti = finiti li'); errore = il primo problema trovato.
+function riLeggi(c, dati) {
+    const out = [];
+    let errore = null;
+    const sbaglio = t => { errore = errore || t; };
+    for (const p of dati.partite) {
+        const scelti = lato => {
+            const sel = [...c.querySelectorAll(`select[data-p="${CSS.escape(p.k)}"][data-lato="${lato}"]`)];
+            if (!sel.length) return [...p[lato].scelti];          // squadra senza formazione: com'era
+            const v = sel.sort((a, b) => a.dataset.n - b.dataset.n).map(s => s.value || '');
+            return p.tipo === 'Doppio' ? [v[0], v[1] || ''] : [v[0], ''];
+        };
+        const g = { sx: scelti('sx'), dx: scelti('dx') };
+        if (p.tipo === 'Doppio' && ((g.sx[0] && g.sx[0] === g.sx[1]) || (g.dx[0] && g.dx[0] === g.dx[1])))
+            sbaglio(`Partita ${p.ordine}: lo stesso giocatore due volte nel doppio.`);
+        const set = [];
+        let vuoto = false;
+        for (let i = 0; i < RI_MAX_SET; i++) {
+            const val = lato => c.querySelector(`input.riPt[data-p="${CSS.escape(p.k)}"][data-set="${i}"][data-lato="${lato}"]`)?.value.trim() || '';
+            const s = val('sx'), d = val('dx');
+            if (!s && !d) { vuoto = true; continue; }
+            if (vuoto) { sbaglio(`Partita ${p.ordine}: c'è un set vuoto prima del set ${i + 1}.`); break; }
+            if (!/^\d+$/.test(s) || !/^\d+$/.test(d)) { sbaglio(`Partita ${p.ordine}, set ${i + 1}: servono due numeri.`); break; }
+            set.push([+s, +d]);
+        }
+        const esito = riEsitoSet(set, dati.setPerVincere);
+        if (esito.errore) sbaglio(`Partita ${p.ordine}: ${esito.errore}.`);
+        out.push({ k: p.k, sx: g.sx, dx: g.dx, set, esito });
+    }
+    return { partite: out, errore };
+}
+
+// Ricalcola sotto ogni partita chi vince e, in fondo, il risultato
+// dell'incontro con quanto e' scritto adesso (non ancora salvato).
+function riAggiorna(c, dati) {
+    const { partite } = riLeggi(c, dati);
+    let ps = 0, pd = 0;
+    for (const x of partite) {
+        const el = c.querySelector(`[data-esito="${CSS.escape(x.k)}"]`);
+        const p = dati.partite.find(q => q.k === x.k);
+        const e = x.esito;
+        if (e.chiusa) { if (e.vs > e.vd) ps++; else pd++; }
+        else if (!x.set.length && p.csi && p.csi[0] !== p.csi[1]) { if (p.csi[0] > p.csi[1]) ps++; else pd++; }   // resta com'e'
+        if (!el) continue;
+        const nome = sx => {
+            const sq = sx ? dati.sx : dati.dx, scelti = sx ? x.sx : x.dx;
+            const n = scelti.filter(Boolean).map(k => [...(sq.voci || []), ...(sq.vociDoppio || [])].find(v => v.k === k)?.nome
+                ?.replace(/^.*? — /, '') || '?');
+            return n.length ? n.join(' / ') : (p[sx ? 'sx' : 'dx'].nomi.filter(Boolean).join(' / ') || (sx ? dati.sx.nome : dati.dx.nome));
+        };
+        el.textContent = e.errore ? '⚠ ' + e.errore
+            : e.chiusa ? `✓ vince ${nome(e.vs > e.vd)} ${Math.max(e.vs, e.vd)}-${Math.min(e.vs, e.vd)}`
+            : x.set.length ? `non finita: ${e.vs}-${e.vd}` : (p.csi ? `resta: set vinti ${p.csi[0]}-${p.csi[1]}` : 'da giocare');
+        el.classList.toggle('errore', !!e.errore);
+    }
+    const t = c.querySelector('#riTot');
+    if (t) t.textContent = `Risultato ${ps} - ${pd}  (${dati.sx.nome} - ${dati.dx.nome})` +
+        (dati.archivio && (dati.archivio[0] !== ps || dati.archivio[1] !== pd)
+            ? `\nIn archivio adesso: ${dati.archivio[0]} - ${dati.archivio[1]}. Salvando vale quello delle partite.` : '');
+}
+
+// Ogni tasto ricalcola gli esiti; due cifre scritte = si passa da sola alla
+// casella dopo (11, poi 7...): con una cifra sola si tocca "avanti".
+function riAggancia(c, dati) {
+    const caselle = [...c.querySelectorAll('input.riPt')];
+    c.addEventListener('input', e => {
+        if (e.target.matches('input.riPt')) {
+            e.target.value = e.target.value.replace(/\D/g, '').slice(0, 2);
+            if (e.target.value.length === 2) caselle[caselle.indexOf(e.target) + 1]?.focus();
+        }
+        riAggiorna(c, dati);
+    });
+    c.addEventListener('change', () => riAggiorna(c, dati));
+    riAggiorna(c, dati);
+}
+
+// Da sx/dx (ordine del referto) a casa/ospite (ordine del database)
+const riCasa = (dati, sx, dx) => dati.abcInCasa ? [sx, dx] : [dx, sx];
+
 // ---------------- classifica ----------------
 // Stesso disegno nelle due PWA; cambia solo da dove arrivano i numeri
 // (classifica.js: nel cloud li calcola il telefono, in rete locale il PC).

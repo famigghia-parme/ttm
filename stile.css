@@ -335,3 +335,25 @@ h3.clTitolo.nostra { border-left: 6px solid var(--verde); padding-left: 8px; }
 .paPartita { margin-top: .25em; font-size: .92em; }
 .paPartita .clEsito { margin-right: .3em; }
 #paStagione { margin: .3em 0; }
+
+/* 20/11: risultati a fine gara (riHtml in comune.js). Ogni partita in un
+   riquadro con la barra a sinistra; i set in una griglia: una colonna per
+   set, sopra la squadra A B C, sotto X Y Z (come sul referto) */
+.riTesta { display: flex; justify-content: space-between; gap: 10px; margin: 8px 0; }
+.riTesta div:last-child { text-align: right; }
+.riPart { border: 1px solid var(--bordo); border-left: 6px solid var(--verde); border-radius: 8px;
+  padding: 8px; margin: 10px 0; background: #fff; }
+.riPart:nth-of-type(even) { background: #f6f8f6; }
+.riGioc { display: flex; align-items: center; gap: 6px; margin: 6px 0; }
+.riGioc > div { flex: 1; min-width: 0; }
+.riGioc > span { flex: none; color: var(--grigio); font-size: 13px; }
+.riGioc select { width: 100%; font-size: 15px; padding: 6px 2px; margin: 2px 0; }
+.riNomi { font-size: 14px; padding: 6px 2px; }
+.riSet { display: grid; grid-auto-flow: column; grid-template-rows: auto auto auto;
+  grid-template-columns: 28px repeat(5, minmax(0, 1fr)); gap: 4px; align-items: center; }
+.riSet small { text-align: center; color: var(--grigio); font-size: 12px; }
+.riSet .riChi { text-align: center; }
+.riSet input.riPt { width: 100%; box-sizing: border-box; text-align: center; font-size: 18px; padding: 8px 0; margin: 0; }
+.riEsito { margin-top: 6px; font-size: 14px; font-weight: 600; }
+.riEsito.errore { color: #b00; }
+.rpTot { white-space: pre-line; font-weight: 700; margin: 10px 0; }

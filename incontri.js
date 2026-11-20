@@ -5,6 +5,8 @@
 // che disegnano qui dentro, si scarica il punto per punto per la gara e si
 // crea il referto in PDF (pdf.js). Dal 10/10 (1.2.0) anche la
 // Disponibilità (disponibilita.js): chi c'e' per quella gara.
+// Dal 20/11 (1.6.0) i Risultati a fine gara (risultati.js): il referto
+// ricopiato dopo la gara, come "Correggi" del PC.
 //
 // Due sezioni del menu usano questo file (stessa struttura nella PWA in
 // rete locale, wwwroot/incontri.js):
@@ -28,7 +30,7 @@ try {
 const inVista = modo => ({
     html: '<div id="inCorpo"></div>',
     init: () => {
-        inModo = modo; inAperto = null; fz = null; fzModificata = false; fzRitorno = null; rf = null; rfModificata = false; ds = null; lvLascia();
+        inModo = modo; inAperto = null; fz = null; fzModificata = false; fzRitorno = null; rf = null; rfModificata = false; ds = null; ri = null; lvLascia();
         const da = modo === 'incontri' ? inDaAprire : null;
         inDaAprire = null;
         inRitorno = da ? { etichetta: da.etichetta, vai: da.vai } : null;
@@ -41,7 +43,10 @@ const inVista = modo => ({
     // ridisegna nulla (si perderebbero); senza, si ricarica con i dati nuovi.
     // Lo stesso per i Dati del referto.
     // Disponibilita' aperta: si ridisegna (le risposte degli altri).
+    // Risultati a fine gara aperti: non si ridisegna (si perderebbe cio' che
+    // si sta scrivendo); salvando si rileggono i dati di adesso.
     suDati: () => lv ? lvDisegna()
+        : ri ? null
         : ds ? dsMostra()
         : fz ? (fzModificata ? null : fzApri(fz.uid, fz.sel, true))
         : rf ? (rfModificata ? null : rfApri(rf.uid, true))
@@ -214,6 +219,7 @@ async function inScheda(uid) {
         <button class="pieno chiaro" id="inScarica">${scaricato ? '📥 Scaricato — aggiorna' : '📥 Scarica per la gara'}</button>
         <div class="lvInfo">${scaricato ? 'Ultimo scarico: ' + new Date(scaricato).toLocaleString('it-IT') : 'Da fare prima di partire, con la rete: poi funziona anche senza.'}</div>
         <button class="pieno chiaro" id="inPunti">🏓 Segna i punti</button>`}
+      <button class="pieno chiaro" id="inRisultati">📝 Risultati a fine gara</button>
       <button class="pieno chiaro" id="inReferto">📋 Dati del referto</button>
       ${Pdf.nomeModello(x.c.tipo, x.c.formula)
             ? `<button class="pieno chiaro" id="inPdf">📄 Referto PDF</button>
@@ -234,6 +240,8 @@ async function inScheda(uid) {
     if (bd) bd.onclick = () => dsApri(uid);
     // Anche a incontro terminato: ora di fine e provvedimenti si scrivono dopo
     $('#inReferto').onclick = () => rfApri(uid);
+    // 20/11: referto ricopiato a gara finita (risultati.js), anche a incontro terminato
+    $('#inRisultati').onclick = () => riApri(uid);
     // Referto PDF (pdf.js): lo crea il telefono, anche senza rete. Se e'
     // gia' stato creato per questo incontro, il riquadro resta.
     const bpdf = $('#inPdf');

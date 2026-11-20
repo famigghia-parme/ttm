@@ -65,6 +65,8 @@ const GARA_INCONTRO = ['squadra_lettere_abc_uid', 'colore_maglia_casa', 'colore_
 //          (Olimpica: doppioPosti dice quali posti la compongono), null =
 //          nessun doppio;
 //  punti: regola dei punti in classifica (Gioco.puntiClassifica);
+//  sostDopo = OrdineDopoIlQualeSostituzione (20/11, risultati a fine gara):
+//          la riserva puo' entrare in un singolo dopo questa partita;
 //  dueTavoli = SupportaDueTavoli;
 //  partite: la sequenza dell'incontro, nell'ordine di gioco. Serve a creare
 //          le partite dal telefono quando il PC non le ha ancora create.
@@ -74,20 +76,20 @@ const GARA_INCONTRO = ['squadra_lettere_abc_uid', 'colore_maglia_casa', 'colore_
 const S = (abc, xyz, fase, tavolo2 = 1) => ({ tipo: 'Singolo', posto_abc: abc, posto_xyz: xyz, fase, tavolo2 });
 const D = (fase, tavolo2 = 1) => ({ tipo: 'Doppio', posto_abc: 'Doppio', posto_xyz: 'Doppio', fase, tavolo2 });
 const FORMULE = {
-    Courbillon: { titolari: 2, riserve: 3, doppio: 'libero', punti: 'standard', dueTavoli: false,
+    Courbillon: { sostDopo: 3, titolari: 2, riserve: 3, doppio: 'libero', punti: 'standard', dueTavoli: false,
         partite: [S('A', 'A', 1), S('B', 'B', 1), D(2), S('A', 'B', 3), S('B', 'A', 3)] },
-    MiniSwaythling: { titolari: 3, riserve: 2, doppio: null, punti: 'standard', dueTavoli: true,
+    MiniSwaythling: { sostDopo: 3, titolari: 3, riserve: 2, doppio: null, punti: 'standard', dueTavoli: true,
         partite: [S('A', 'A', 1, 1), S('B', 'B', 1, 2), S('C', 'C', 1, 1), S('B', 'A', 2, 2), S('A', 'C', 2, 1), S('C', 'B', 2, 2)] },
-    NewSwaythling: { titolari: 3, riserve: 2, doppio: null, punti: 'standard', dueTavoli: false,
+    NewSwaythling: { sostDopo: 3, titolari: 3, riserve: 2, doppio: null, punti: 'standard', dueTavoli: false,
         partite: [S('A', 'A', 1), S('B', 'B', 1), S('C', 'C', 1), S('A', 'B', 2), S('B', 'A', 2)] },
-    Olimpica: { titolari: 3, riserve: 2, doppio: 'fisso', doppioPosti: ['B', 'C'], punti: 'standard', dueTavoli: false,
+    Olimpica: { sostDopo: 2, titolari: 3, riserve: 2, doppio: 'fisso', doppioPosti: ['B', 'C'], punti: 'standard', dueTavoli: false,
         partite: [D(1), S('A', 'A', 2), S('C', 'C', 2), S('A', 'B', 3), S('B', 'A', 3)] },
-    MiniSwaythlingDoppio: { titolari: 3, riserve: 3, doppio: 'libero', punti: 'miniDoppio', dueTavoli: true,
+    MiniSwaythlingDoppio: { sostDopo: 3, titolari: 3, riserve: 3, doppio: 'libero', punti: 'miniDoppio', dueTavoli: true,
         partite: [S('A', 'A', 1, 1), S('B', 'B', 1, 2), S('C', 'C', 1, 1), D(2, 1), S('B', 'A', 3, 1), S('A', 'C', 3, 2), S('C', 'B', 3, 1)] },
-    CSIFormula: { titolari: 3, riserve: 2, doppio: null, punti: 'vinte', dueTavoli: false,
+    CSIFormula: { sostDopo: 3, titolari: 3, riserve: 2, doppio: null, punti: 'vinte', dueTavoli: false,
         partite: [S('A', 'A', 1), S('B', 'B', 1), S('C', 'C', 1), S('B', 'A', 2), S('A', 'C', 2), S('C', 'B', 2)] },
     // 12/11 (art. 2A 2026/27): UNA riserva; il doppio fra tutti (righe Doppio1/2)
-    CsiCorbillon: { titolari: 2, riserve: 1, doppio: 'libero', doppioDaTutti: true, punti: 'vinte', dueTavoli: true,
+    CsiCorbillon: { sostDopo: 3, titolari: 2, riserve: 1, doppio: 'libero', doppioDaTutti: true, punti: 'vinte', dueTavoli: true,
         partite: [S('A', 'A', 1, 1), S('B', 'B', 1, 2), D(2, 1), S('A', 'B', 3, 1), S('B', 'A', 3, 2)] }
 };
 // Partite da vincere per chiudere l'incontro (FormulaGioco.PartitePerChiudere)
